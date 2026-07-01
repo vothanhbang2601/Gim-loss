@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gimjaban Yield Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script>
+window.storage = {
+  async get(key, shared){
+    const raw = localStorage.getItem('gz_store_'+key);
+    if (raw === null) throw new Error('not found');
+    return { key, value: raw, shared: !!shared };
+  },
+  async set(key, value, shared){
+    localStorage.setItem('gz_store_'+key, value);
+    return { key, value, shared: !!shared };
+  },
+  async delete(key, shared){
+    localStorage.removeItem('gz_store_'+key);
+    return { key, deleted:true, shared: !!shared };
+  },
+  async list(prefix, shared){
+    const keys = Object.keys(localStorage).filter(k=>k.startsWith('gz_store_'+(prefix||''))).map(k=>k.replace('gz_store_',''));
+    return { keys, prefix, shared: !!shared };
+  }
+};
+</script>
+<style>
+body{ margin:0; background:#0d1f1a; -webkit-tap-highlight-color: transparent; }
+html{ -webkit-text-size-adjust:100%; }
+:root{
+  --sea-900:#0d1f1a;
+  --sea-800:#142e26;
+  --sea-700:#1d4036;
+  --gold:#c9a24b;
+  --gold-soft:#e3c372;
+  --cream:#f3ede0;
+  --red:#b5483c;
+  --green-ok:#3f7a55;
+  --line: rgba(255,255,255,0.08);
+}
+*{box-sizing:border-box;}
+#app-root{
+  font-family: 'Segoe UI', -apple-system, sans-serif;
+  background: var(--sea-900);
+  color: var(--cream);
+  min-height:100%;
+}
+.gz-header{
+  background: linear-gradient(135deg, var(--sea-800), var(--sea-900) 70%);
+  padding: 26px 28px 0;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+.gz-eyebrow{ font-size:11px; letter-spacing:3px; text-transform:uppercase; color: var(--gold-soft); font-weight:600; margin-bottom:6px; }
+.gz-title{ font-family: Georgia, serif; font-size: 24px; font-weight:700; color: var(--cream); margin:0; display:flex; align-items:baseline; gap:10px; }
+.gz-title span{ font-size:14px; font-weight:400; color: var(--gold-soft); font-family:'Segoe UI',sans-serif;}
+.gz-sub{ font-size:12.5px; color: rgba(243,237,224,0.55); margin-top:6px; padding-bottom:18px; }
+
+.gz-tabs{ display:flex; gap:4px; padding-top:4px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+.gz-tabs::-webkit-scrollbar{ display:none; }
+.gz-tab{
+  padding:12px 16px; font-size:13px; font-weight:600; color:rgba(243,237,224,0.55);
+  border-bottom:2px solid transparent; cursor:pointer; user-select:none; white-space:nowrap; flex-shrink:0;
+}
+.gz-tab.active{ color:var(--gold-soft); border-bottom-color:var(--gold); }
+.gz-tab:hover{ color:var(--cream); }
+
+.gz-body{ padding: 22px 28px 32px; }
+.gz-daterow{ display:flex; align-items:center; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
+.gz-daterow label{ font-size:12px; color:rgba(243,237,224,0.6); }
+.gz-daterow input[type=date], .gz-daterow input[type=text]{
+  background: var(--sea-800); border:1px solid var(--line); color:var(--cream);
+  padding:8px 12px; border-radius:8px; font-size:14px; font-family:inherit;
+}
+.gz-tare-pills{ display:flex; gap:8px; margin-left:auto; align-items:center; }
+.gz-pill{ font-size:11.5px; padding:6px 11px; border-radius:20px; background:var(--sea-700); border:1px solid var(--line); color:rgba(243,237,224,0.75); display:flex; align-items:center; gap:6px;}
+.gz-pill input{ width:60px; background:transparent; border:none; color:var(--gold-soft); font-weight:700; font-size:12px; text-align:right; }
+.gz-pill input:focus{ outline:none; }
+
+.gz-form{ background: var(--sea-800); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:22px; }
+.gz-form-title{ font-size:12.5px; text-transform:uppercase; letter-spacing:1.5px; color:var(--gold-soft); margin-bottom:16px; font-weight:600; }
+.gz-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:14px;}
+.gz-field label{ display:block; font-size:11px; color:rgba(243,237,224,0.55); margin-bottom:6px;}
+.gz-field select, .gz-field input{
+  width:100%; background:var(--sea-900); border:1px solid var(--line); color:var(--cream);
+  padding:10px 12px; border-radius:8px; font-size:14px; font-family:inherit;
+}
+.gz-field select:focus, .gz-field input:focus{ outline:none; border-color:var(--gold); }
+.gz-calc-row{ display:flex; align-items:center; gap:10px; background:var(--sea-900); border:1px dashed var(--line); border-radius:10px; padding:12px 14px; margin-bottom:14px; font-size:13px; color:rgba(243,237,224,0.8); flex-wrap:wrap; }
+.gz-calc-row .res{ color:var(--gold-soft); font-weight:700; font-size:14.5px; }
+.gz-btn{ background: var(--gold); color: var(--sea-900); border:none; padding:11px 22px; border-radius:8px; font-size:13.5px; font-weight:700; cursor:pointer; font-family:inherit; transition: transform .12s ease, background .12s ease; }
+.gz-btn:hover{ background: var(--gold-soft); transform: translateY(-1px); }
+.gz-btn:disabled{ opacity:0.4; cursor:not-allowed; transform:none; }
+.gz-btn.small{ padding:6px 12px; font-size:12px; }
+.gz-btn.danger{ background:transparent; color:var(--red); border:1px solid rgba(181,72,60,0.4); padding:6px 10px; font-size:12px;}
+.gz-btn.danger:hover{ background:rgba(181,72,60,0.12); }
+
+.gz-summary{ display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:22px; }
+.gz-card{ background: var(--sea-800); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.gz-card .lbl{ font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:rgba(243,237,224,0.5); margin-bottom:6px;}
+.gz-card .val{ font-family: Georgia, serif; font-size:21px; font-weight:700; color:var(--cream); }
+.gz-card .val.gold{ color: var(--gold-soft); }
+.gz-card .val.ok{ color: var(--green-ok); }
+.gz-card .val.warn{ color: var(--red); }
+.gz-card .note{ font-size:10.5px; color:rgba(243,237,224,0.4); margin-top:4px; }
+
+.gz-table-wrap{ background: var(--sea-800); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:24px;}
+.gz-table-head{ display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); }
+.gz-table-head h3{ margin:0; font-size:13px; font-weight:700; color:var(--gold-soft); text-transform:uppercase; letter-spacing:1px;}
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+thead th{ text-align:left; padding:9px 14px; font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px; color:rgba(243,237,224,0.45); border-bottom:1px solid var(--line); white-space:nowrap; }
+tbody td{ padding:10px 14px; border-bottom:1px solid var(--line); color:rgba(243,237,224,0.85); white-space:nowrap; }
+tbody tr:last-child td{ border-bottom:none; }
+tbody tr:hover{ background: rgba(255,255,255,0.02); }
+tbody input{ background:var(--sea-900); border:1px solid var(--line); color:var(--cream); padding:6px 8px; border-radius:6px; font-size:12.5px; width:90px; font-family:inherit;}
+tbody input:focus{ outline:none; border-color:var(--gold); }
+.tag{ display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+.tag.ok{ background:rgba(63,122,85,0.18); color:#7ec99a; }
+.tag.warn{ background:rgba(181,72,60,0.18); color:#e08a7e; }
+.empty-state{ padding:36px 20px; text-align:center; color:rgba(243,237,224,0.4); font-size:13px; }
+.gz-foot{ padding:12px 20px; font-size:11px; color:rgba(243,237,224,0.35); border-top:1px solid var(--line); }
+@media (max-width:640px){
+  #app-root{ border-radius:0; }
+  .gz-header{ padding:18px 16px 0; position:sticky; top:0; z-index:10; }
+  .gz-body{ padding:16px 16px 40px; }
+  .gz-title{ font-size:19px; flex-wrap:wrap; }
+  .gz-title span{ font-size:12px; }
+  .gz-daterow{ flex-direction:column; align-items:stretch; gap:10px; }
+  .gz-daterow label{ font-size:12px; }
+  .gz-daterow input[type=date]{ width:100%; padding:12px; font-size:16px; }
+  .gz-tare-pills{ margin-left:0; width:100%; justify-content:space-between; }
+  .gz-pill{ flex:1; justify-content:center; padding:10px 8px; }
+  .gz-pill input{ width:50px; font-size:13px; }
+  .gz-grid{ grid-template-columns: 1fr; gap:12px; }
+  .gz-field select, .gz-field input{ padding:12px; font-size:16px; } /* 16px avoids iOS zoom */
+  .gz-btn{ width:100%; padding:14px; font-size:14px; }
+  .gz-btn.small{ width:auto; padding:10px 14px; }
+  .gz-table-head{ flex-direction:column; align-items:stretch; gap:8px; padding:14px 16px; }
+  .gz-table-head h3{ font-size:12px; }
+  .gz-table-head div{ display:flex; gap:8px; flex-wrap:wrap; }
+  .gz-table-head .gz-btn.small{ flex:1; min-width:120px; }
+  .gz-summary{ grid-template-columns: repeat(2,1fr); }
+  table{ font-size:12px; }
+  thead th, tbody td{ padding:9px 10px; }
+  tbody input{ width:72px; padding:8px; font-size:13px; }
+  .gz-calc-row{ flex-direction:column; align-items:flex-start; gap:6px; }
+}
+@media (max-width:420px){
+  .gz-summary{ grid-template-columns: 1fr 1fr; }
+  .gz-card .val{ font-size:18px; }
+}
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback } = React;
+
+const STORE_BATCHES = "gz_batches_v2";
+const STORE_KHO = "gz_kho_v2";
+const STORE_PRODUCTS = "gz_products_v2";
+const STORE_TARE = "gz_tare_v2";
+
+const DEFAULT_TARE = { xe1: 12.91, xe2: 13.39 };
+const DEFAULT_PRODUCTS = [
+  { code: "1024505", name: "BBG RONG BIỂN GIÒN NƯỚC TƯƠNG 50G*20EA", klbb: 0.05 },
+  { code: "1024506", name: "BBG RONG BIỂN GIÒN NƯỚC TƯƠNG 30GX20EA", klbb: 0.03 },
+  { code: "1024508", name: "BBG RONG BIỂN GIÒN CÁ HỒI 45GX20EA", klbb: 0.045 },
+  { code: "1027251", name: "BBG RB GIÒN CHÀ BÔNG GÀ 45G*20EA", klbb: 0.045 },
+  { code: "1027250", name: "BBG RB GIÒN CHÀ BÔNG BÒ 45G*20EA", klbb: 0.045 },
+  { code: "1027245", name: "BBG RB GIÒN CHÀ BÔNG TÔM 45G*20EA", klbb: 0.045 },
+  { code: "1027689", name: "BBG RB GIÒN CHÀ BÔNG BÒ 30G*2*20EA", klbb: 0.03 },
+  { code: "1027691", name: "BBG RB GIÒN CHÀ BÔNG TÔM 30G*2*20EA", klbb: 0.03 },
+  { code: "1027692", name: "BBG RB GIÒN CHÀ BÔNG GÀ 30G*2*20EA", klbb: 0.03 },
+];
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function fmt(n, d=2){ if (n===null||n===undefined||isNaN(n)) return "—"; return Number(n).toLocaleString('vi-VN',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtPct(n){ if (n===null||n===undefined||isNaN(n)) return "—"; return Number(n).toLocaleString('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1})+"%"; }
+
+function csvEscape(v){
+  if (v===null || v===undefined) return "";
+  const s = String(v);
+  if (/[",\n;]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+function downloadCSV(filename, rows){
+  const BOM = "\uFEFF"; // for Excel Vietnamese accents
+  const csv = BOM + rows.map(row => row.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function loadKey(key, fallback){
+  try{
+    const r = await window.storage.get(key, false);
+    if (r && r.value) return JSON.parse(r.value);
+  } catch(e){}
+  return fallback;
+}
+async function saveKey(key, value){
+  try{ await window.storage.set(key, JSON.stringify(value), false); } catch(e){ console.error(e); }
+}
+
+function App(){
+  const [tab, setTab] = useState("batches"); // batches | summary
+  const [date, setDate] = useState(todayStr());
+  const [loading, setLoading] = useState(true);
+
+  const [tare, setTare] = useState(DEFAULT_TARE);
+  const [products, setProducts] = useState(DEFAULT_PRODUCTS);
+  const [batches, setBatches] = useState([]);
+  const [kho, setKho] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const [t, p, b, k] = await Promise.all([
+        loadKey(STORE_TARE, DEFAULT_TARE),
+        loadKey(STORE_PRODUCTS, DEFAULT_PRODUCTS),
+        loadKey(STORE_BATCHES, []),
+        loadKey(STORE_KHO, []),
+      ]);
+      setTare(t); setProducts(p); setBatches(b); setKho(k);
+      setLoading(false);
+    })();
+  }, []);
+
+  const updateTare = (key, val) => {
+    const next = { ...tare, [key]: val };
+    setTare(next);
+    saveKey(STORE_TARE, next);
+  };
+
+  // ---------- PRODUCT CATALOG ----------
+  const [newCode, setNewCode] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newKlbb, setNewKlbb] = useState("");
+
+  const addProduct = () => {
+    if (!newName.trim()) return;
+    const next = [...products, { code: newCode.trim(), name: newName.trim(), klbb: newKlbb ? parseFloat(newKlbb) : 0.03 }];
+    setProducts(next); saveKey(STORE_PRODUCTS, next);
+    setNewCode(""); setNewName(""); setNewKlbb("");
+  };
+  const updateProduct = (idx, field, value) => {
+    const next = products.map((p,i)=> i===idx ? {...p, [field]: field==="klbb" ? parseFloat(value)||0 : value} : p);
+    setProducts(next); saveKey(STORE_PRODUCTS, next);
+  };
+  const deleteProduct = (idx) => {
+    const next = products.filter((_,i)=>i!==idx);
+    setProducts(next); saveKey(STORE_PRODUCTS, next);
+    if (productIdx >= next.length) setProductIdx(0);
+  };
+
+  // ---------- BATCH FORM STATE ----------
+  const [productIdx, setProductIdx] = useState(0);
+  const [xe1Gross, setXe1Gross] = useState("");
+  const [xe2Gross, setXe2Gross] = useState("");
+  const [note, setNote] = useState("");
+
+  const x1 = parseFloat(xe1Gross);
+  const x2 = parseFloat(xe2Gross);
+  const totalGross = (!isNaN(x1) ? x1 : 0) + (!isNaN(x2) ? x2 : 0);
+  const tareSum = (parseFloat(tare.xe1)||0) + (parseFloat(tare.xe2)||0);
+  const netAfterRoast = (!isNaN(x1) || !isNaN(x2)) ? Math.max(totalGross - tareSum, 0) : null;
+  const canAddBatch = (!isNaN(x1) || !isNaN(x2)) && totalGross > tareSum;
+
+  const addBatch = async () => {
+    if (!canAddBatch) return;
+    const prod = products[productIdx] || products[0];
+    const entry = {
+      id: Date.now()+"_"+Math.random().toString(36).slice(2,7),
+      date, code: prod.code, product: prod.name,
+      xe1: isNaN(x1)?0:x1, xe2: isNaN(x2)?0:x2,
+      tare1: parseFloat(tare.xe1)||0, tare2: parseFloat(tare.xe2)||0,
+      totalGross: Number(totalGross.toFixed(2)),
+      netAfterRoast: Number(netAfterRoast.toFixed(2)),
+      note: note.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    const next = [entry, ...batches];
+    setBatches(next);
+    saveKey(STORE_BATCHES, next);
+    setXe1Gross(""); setXe2Gross(""); setNote("");
+  };
+  const deleteBatch = (id) => {
+    const next = batches.filter(b=>b.id!==id);
+    setBatches(next); saveKey(STORE_BATCHES, next);
+  };
+
+  const dayBatches = useMemo(() => batches.filter(b=>b.date===date)
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)), [batches, date]);
+
+  const dayTotalsByProduct = useMemo(() => {
+    const map = {};
+    dayBatches.forEach(b => {
+      const k = b.code+"|"+b.product;
+      if (!map[k]) map[k] = { code:b.code, product:b.product, count:0, sumGross:0, sumNet:0 };
+      map[k].count++; map[k].sumGross += b.totalGross; map[k].sumNet += b.netAfterRoast;
+    });
+    return Object.values(map);
+  }, [dayBatches]);
+
+  const dayTotalsAll = useMemo(() => {
+    if (dayBatches.length===0) return null;
+    return {
+      count: dayBatches.length,
+      sumGross: dayBatches.reduce((s,b)=>s+b.totalGross,0),
+      sumNet: dayBatches.reduce((s,b)=>s+b.netAfterRoast,0),
+    };
+  }, [dayBatches]);
+
+  // ---------- KHO (DAILY SUMMARY) ----------
+  const dayKho = useMemo(() => kho.filter(k=>k.date===date), [kho, date]);
+
+  const addKhoRow = async () => {
+    const prod = products[0];
+    const autoNet = dayTotalsByProduct.find(p=>p.code===prod.code && p.product===prod.name);
+    const entry = {
+      id: Date.now()+"_"+Math.random().toString(36).slice(2,7),
+      date, code: prod.code, product: prod.name, klbb: prod.klbb,
+      tongSauRang: autoNet ? Number(autoNet.sumNet.toFixed(2)) : 0,
+      slNhapKho: "", klNhapKho: "", baoBiNhan: "",
+    };
+    const next = [...kho, entry];
+    setKho(next); saveKey(STORE_KHO, next);
+  };
+  const updateKhoRow = (id, field, value) => {
+    const next = kho.map(r => r.id===id ? {...r, [field]: value} : r);
+    setKho(next); saveKey(STORE_KHO, next);
+  };
+  const deleteKhoRow = (id) => {
+    const next = kho.filter(r=>r.id!==id);
+    setKho(next); saveKey(STORE_KHO, next);
+  };
+  const pullFromBatches = (id) => {
+    const row = kho.find(r=>r.id===id);
+    if (!row) return;
+    const match = dayTotalsByProduct.find(p=>p.code===row.code && p.product===row.product);
+    updateKhoRow(id, "tongSauRang", match ? Number(match.sumNet.toFixed(2)) : 0);
+  };
+
+  const khoComputed = useMemo(() => dayKho.map(r => {
+    const tsr = parseFloat(r.tongSauRang);
+    const kln = parseFloat(r.klNhapKho);
+    const sln = parseFloat(r.slNhapKho);
+    const bbn = parseFloat(r.baoBiNhan);
+    const haoHutKC = (!isNaN(tsr) && !isNaN(kln)) ? Number((tsr-kln).toFixed(3)) : null;
+    const lossPct = (!isNaN(tsr) && tsr>0 && haoHutKC!==null) ? Number((haoHutKC/tsr*100).toFixed(2)) : null;
+    const haoHutBB = (!isNaN(bbn) && !isNaN(sln)) ? Number((bbn-sln).toFixed(0)) : null;
+    return { ...r, haoHutKC, lossPct, haoHutBB };
+  }), [dayKho]);
+
+  const dayLossAvg = useMemo(() => {
+    const valid = khoComputed.filter(r=>r.lossPct!==null);
+    if (valid.length===0) return null;
+    const totalNet = valid.reduce((s,r)=>s+parseFloat(r.tongSauRang||0),0);
+    const totalLoss = valid.reduce((s,r)=>s+(r.haoHutKC||0),0);
+    return totalNet>0 ? (totalLoss/totalNet*100) : null;
+  }, [khoComputed]);
+
+  // ---------- EXPORT CSV ----------
+  const exportBatchesCSV = (scope) => {
+    const data = scope==="day" ? dayBatches : batches;
+    const header = ["Ngày","Giờ","Code","Sản phẩm","Xe 1 (kg)","Xe 2 (kg)","Bì Xe 1","Bì Xe 2","Tổng cân (kg)","KL sau rang (kg)","Ghi chú"];
+    const rows = [header, ...data.slice().sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).map(b => [
+      b.date, new Date(b.createdAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}),
+      b.code, b.product, fmt(b.xe1), fmt(b.xe2), fmt(b.tare1), fmt(b.tare2), fmt(b.totalGross), fmt(b.netAfterRoast), b.note
+    ])];
+    downloadCSV(`me_rang_${scope==="day"?date:"all"}.csv`, rows);
+  };
+
+  const exportKhoCSV = (scope) => {
+    const data = (scope==="day" ? dayKho : kho).map(r => {
+      const tsr = parseFloat(r.tongSauRang);
+      const kln = parseFloat(r.klNhapKho);
+      const sln = parseFloat(r.slNhapKho);
+      const bbn = parseFloat(r.baoBiNhan);
+      const haoHutKC = (!isNaN(tsr) && !isNaN(kln)) ? (tsr-kln) : null;
+      const lossPct = (!isNaN(tsr) && tsr>0 && haoHutKC!==null) ? (haoHutKC/tsr*100) : null;
+      const haoHutBB = (!isNaN(bbn) && !isNaN(sln)) ? (bbn-sln) : null;
+      return { ...r, haoHutKC, lossPct, haoHutBB };
+    });
+    const header = ["Ngày","Code","Sản phẩm","KLBB (kg)","Tổng KL sau rang (kg)","Loss cân (%)","SL nhập kho","KL nhập kho (kg)","Bao bì nhận (túi)","Hao hụt KC (kg)","Hao hụt BB (túi)"];
+    const rows = [header, ...data.map(r => [
+      r.date, r.code, r.product, r.klbb, fmt(r.tongSauRang),
+      r.lossPct!==null?fmt(r.lossPct):"", r.slNhapKho, r.klNhapKho, r.baoBiNhan,
+      r.haoHutKC!==null?fmt(r.haoHutKC,3):"", r.haoHutBB!==null?r.haoHutBB:""
+    ])];
+    downloadCSV(`hao_hut_${scope==="day"?date:"all"}.csv`, rows);
+  };
+
+  const exportProductsCSV = () => {
+    const header = ["Code","Tên sản phẩm","KLBB (kg/gói)"];
+    const rows = [header, ...products.map(p => [p.code, p.name, p.klbb])];
+    downloadCSV("danh_muc_san_pham.csv", rows);
+  };
+
+  return (
+    <div>
+      <div className="gz-header">
+        <div className="gz-eyebrow">Gimjaban · Kiểm soát hao hụt</div>
+        <h1 className="gz-title">Sổ rang &amp; theo dõi hao hụt <span>Yield &amp; Loss Log</span></h1>
+        <div className="gz-sub">Cân mẻ rang theo xe 1 / xe 2, trừ bì, tổng hợp theo sản phẩm và đối chiếu hao hụt khi nhập kho.</div>
+        <div className="gz-tabs">
+          <div className={"gz-tab "+(tab==="batches"?"active":"")} onClick={()=>setTab("batches")}>Cân mẻ rang</div>
+          <div className={"gz-tab "+(tab==="summary"?"active":"")} onClick={()=>setTab("summary")}>Tổng hợp hao hụt theo ngày</div>
+          <div className={"gz-tab "+(tab==="products"?"active":"")} onClick={()=>setTab("products")}>Danh mục sản phẩm</div>
+        </div>
+      </div>
+
+      <div className="gz-body">
+        <div className="gz-daterow">
+          <label>Ngày</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} />
+          <div className="gz-tare-pills">
+            <span className="gz-pill">Xe 1 = <input type="number" step="0.01" value={tare.xe1} onChange={e=>updateTare("xe1", e.target.value)} /> kg</span>
+            <span className="gz-pill">Xe 2 = <input type="number" step="0.01" value={tare.xe2} onChange={e=>updateTare("xe2", e.target.value)} /> kg</span>
+          </div>
+        </div>
+
+        {tab === "batches" && (
+          <React.Fragment>
+            <div className="gz-form">
+              <div className="gz-form-title">Nhập mẻ mới (xe 1 &amp; xe 2)</div>
+              <div className="gz-grid">
+                <div className="gz-field">
+                  <label>Sản phẩm</label>
+                  <select value={productIdx} onChange={e=>setProductIdx(Number(e.target.value))}>
+                    {products.map((p,i)=>(<option key={i} value={i}>{(p.code?p.code+" — ":"")+p.name}</option>))}
+                  </select>
+                </div>
+                <div className="gz-field">
+                  <label>Xe 1 - KL cân (kg)</label>
+                  <input type="number" inputMode="decimal" step="0.01" placeholder="VD: 32.72" value={xe1Gross} onChange={e=>setXe1Gross(e.target.value)} />
+                </div>
+                <div className="gz-field">
+                  <label>Xe 2 - KL cân (kg)</label>
+                  <input type="number" inputMode="decimal" step="0.01" placeholder="VD: 32.12" value={xe2Gross} onChange={e=>setXe2Gross(e.target.value)} />
+                </div>
+                <div className="gz-field">
+                  <label>Ghi chú (tuỳ chọn)</label>
+                  <input type="text" placeholder="VD: mẻ 1" value={note} onChange={e=>setNote(e.target.value)} />
+                </div>
+              </div>
+              <div className="gz-calc-row">
+                <span>Tổng KL cân (xe1+xe2) = <span className="res">{fmt(totalGross)} kg</span></span>
+                <span style={{opacity:0.3}}>|</span>
+                <span>Trừ bì (xe1+xe2 = {fmt(tareSum)} kg) → KL sau rang = <span className="res">{netAfterRoast!==null ? fmt(netAfterRoast)+" kg" : "—"}</span></span>
+                {totalGross>0 && totalGross<=tareSum && (
+                  <span style={{color:"var(--red)"}}>⚠ Tổng KL cân phải lớn hơn tổng bì 2 xe</span>
+                )}
+              </div>
+              <button className="gz-btn" disabled={!canAddBatch} onClick={addBatch}>+ Thêm mẻ vào sổ</button>
+            </div>
+
+            {dayTotalsAll && (
+              <div className="gz-summary">
+                <div className="gz-card"><div className="lbl">Số mẻ trong ngày</div><div className="val">{dayTotalsAll.count}</div></div>
+                <div className="gz-card"><div className="lbl">Tổng KL cân</div><div className="val gold">{fmt(dayTotalsAll.sumGross)} kg</div></div>
+                <div className="gz-card"><div className="lbl">Tổng KL sau rang</div><div className="val gold">{fmt(dayTotalsAll.sumNet)} kg</div></div>
+              </div>
+            )}
+
+            {dayTotalsByProduct.length > 0 && (
+              <div className="gz-table-wrap">
+                <div className="gz-table-head"><h3>Tổng theo sản phẩm trong ngày</h3></div>
+                <table>
+                  <thead><tr><th>Code</th><th>Sản phẩm</th><th>Số mẻ</th><th>Tổng KL cân</th><th>Tổng KL sau rang</th></tr></thead>
+                  <tbody>
+                    {dayTotalsByProduct.map((p,i)=>(
+                      <tr key={i}><td>{p.code||"—"}</td><td>{p.product}</td><td>{p.count}</td><td>{fmt(p.sumGross)} kg</td><td>{fmt(p.sumNet)} kg</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="gz-table-wrap">
+              <div className="gz-table-head">
+                <h3>Chi tiết từng mẻ — {date}</h3>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="gz-btn small" onClick={()=>exportBatchesCSV("day")}>⤓ Xuất CSV (ngày)</button>
+                  <button className="gz-btn small" onClick={()=>exportBatchesCSV("all")}>⤓ Xuất CSV (toàn bộ)</button>
+                </div>
+              </div>
+              {loading ? (
+                <div className="empty-state">Đang tải dữ liệu...</div>
+              ) : dayBatches.length===0 ? (
+                <div className="empty-state">Chưa có mẻ nào trong ngày này.</div>
+              ) : (
+                <div style={{overflowX:"auto"}}>
+                  <table>
+                    <thead><tr><th>Giờ</th><th>Sản phẩm</th><th>Xe 1</th><th>Xe 2</th><th>Tổng cân</th><th>Sau rang</th><th>Ghi chú</th><th></th></tr></thead>
+                    <tbody>
+                      {dayBatches.map(b=>(
+                        <tr key={b.id}>
+                          <td>{new Date(b.createdAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})}</td>
+                          <td>{b.product}</td>
+                          <td>{fmt(b.xe1)}</td>
+                          <td>{fmt(b.xe2)}</td>
+                          <td>{fmt(b.totalGross)}</td>
+                          <td>{fmt(b.netAfterRoast)}</td>
+                          <td>{b.note||"—"}</td>
+                          <td><button className="gz-btn danger" onClick={()=>deleteBatch(b.id)}>Xoá</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </React.Fragment>
+        )}
+
+        {tab === "summary" && (
+          <React.Fragment>
+            {dayLossAvg !== null && (
+              <div className="gz-summary">
+                <div className="gz-card">
+                  <div className="lbl">Loss cân trung bình ngày</div>
+                  <div className={"val "+(dayLossAvg>5?"warn":"ok")}>{fmtPct(dayLossAvg)}</div>
+                  <div className="note">Tổng hao hụt / tổng KL sau rang</div>
+                </div>
+              </div>
+            )}
+            <div className="gz-table-wrap">
+              <div className="gz-table-head">
+                <h3>Theo dõi tỉ lệ hao hụt trọng lượng &amp; bao bì — {date}</h3>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="gz-btn small" onClick={addKhoRow}>+ Thêm dòng</button>
+                  <button className="gz-btn small" onClick={()=>exportKhoCSV("day")}>⤓ Xuất CSV (ngày)</button>
+                  <button className="gz-btn small" onClick={()=>exportKhoCSV("all")}>⤓ Xuất CSV (toàn bộ)</button>
+                </div>
+              </div>
+              {loading ? (
+                <div className="empty-state">Đang tải dữ liệu...</div>
+              ) : khoComputed.length===0 ? (
+                <div className="empty-state">Chưa có dòng tổng hợp nào cho ngày này. Bấm "+ Thêm dòng" để bắt đầu.</div>
+              ) : (
+                <div style={{overflowX:"auto"}}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Code</th><th>Sản phẩm</th><th>KLBB (g)</th>
+                        <th>Tổng KL sau rang (kg)</th><th></th>
+                        <th>Loss cân</th>
+                        <th>SL nhập kho</th><th>KL nhập kho (kg)</th>
+                        <th>Bao bì nhận (túi)</th>
+                        <th>Hao hụt KC (kg)</th><th>Hao hụt BB (túi)</th><th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {khoComputed.map(r=>(
+                        <tr key={r.id}>
+                          <td>{r.code||"—"}</td>
+                          <td>{r.product}</td>
+                          <td>{r.klbb}</td>
+                          <td><input type="number" step="0.1" value={r.tongSauRang} onChange={e=>updateKhoRow(r.id,"tongSauRang",e.target.value)} /></td>
+                          <td><button className="gz-btn small" onClick={()=>pullFromBatches(r.id)} title="Lấy tổng từ sổ cân mẻ rang">↺ tự động</button></td>
+                          <td>{r.lossPct!==null ? <span className={"tag "+(r.lossPct>5?"warn":"ok")}>{fmtPct(r.lossPct)}</span> : "—"}</td>
+                          <td><input type="number" step="1" value={r.slNhapKho} onChange={e=>updateKhoRow(r.id,"slNhapKho",e.target.value)} /></td>
+                          <td><input type="number" step="0.1" value={r.klNhapKho} onChange={e=>updateKhoRow(r.id,"klNhapKho",e.target.value)} /></td>
+                          <td><input type="number" step="1" value={r.baoBiNhan} onChange={e=>updateKhoRow(r.id,"baoBiNhan",e.target.value)} /></td>
+                          <td>{r.haoHutKC!==null ? fmt(r.haoHutKC,3)+" kg" : "—"}</td>
+                          <td>{r.haoHutBB!==null ? r.haoHutBB+" túi" : "—"}</td>
+                          <td><button className="gz-btn danger" onClick={()=>deleteKhoRow(r.id)}>Xoá</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="gz-foot">Loss cân = (Tổng KL sau rang − KL nhập kho) / Tổng KL sau rang. Hao hụt BB = Bao bì nhận − SL nhập kho. Bấm "↺ tự động" để lấy Tổng KL sau rang từ sổ cân mẻ rang (tab bên trái) theo đúng sản phẩm &amp; ngày.</div>
+            </div>
+          </React.Fragment>
+        )}
+
+        {tab === "products" && (
+          <div className="gz-table-wrap">
+            <div className="gz-table-head">
+              <h3>Danh mục sản phẩm</h3>
+              <button className="gz-btn small" onClick={exportProductsCSV}>⤓ Xuất CSV</button>
+            </div>
+            <div style={{padding:"16px 20px", borderBottom:"1px solid var(--line)"}}>
+              <div className="gz-grid" style={{marginBottom:10}}>
+                <div className="gz-field"><label>Code</label><input type="text" placeholder="VD: 1024505" value={newCode} onChange={e=>setNewCode(e.target.value)} /></div>
+                <div className="gz-field" style={{gridColumn:"span 2"}}><label>Tên sản phẩm</label><input type="text" placeholder="VD: BBG RONG BIỂN GIÒN NƯỚC TƯƠNG 50G*20EA" value={newName} onChange={e=>setNewName(e.target.value)} /></div>
+                <div className="gz-field"><label>KLBB (kg/gói)</label><input type="number" step="0.001" placeholder="0.05" value={newKlbb} onChange={e=>setNewKlbb(e.target.value)} /></div>
+              </div>
+              <button className="gz-btn small" onClick={addProduct}>+ Thêm sản phẩm</button>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table>
+                <thead><tr><th>Code</th><th>Tên sản phẩm</th><th>KLBB (kg/gói)</th><th></th></tr></thead>
+                <tbody>
+                  {products.map((p,i)=>(
+                    <tr key={i}>
+                      <td><input type="text" value={p.code} onChange={e=>updateProduct(i,"code",e.target.value)} /></td>
+                      <td style={{minWidth:280}}><input type="text" style={{width:"100%"}} value={p.name} onChange={e=>updateProduct(i,"name",e.target.value)} /></td>
+                      <td><input type="number" step="0.001" value={p.klbb} onChange={e=>updateProduct(i,"klbb",e.target.value)} /></td>
+                      <td><button className="gz-btn danger" onClick={()=>deleteProduct(i)}>Xoá</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="gz-foot">Danh mục này dùng chung cho cả 2 tab "Cân mẻ rang" và "Tổng hợp hao hụt theo ngày". Sửa hoặc xoá tại đây sẽ áp dụng cho lựa chọn sản phẩm ở các tab khác.</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app-root')).render(<App />);
+</script>
+</body>
+</html>
