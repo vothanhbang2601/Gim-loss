@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gimjaban Yield Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+window.storage = {
+  async get(key, shared){
+    const raw = localStorage.getItem('gz_store_'+key);
+    if (raw === null) throw new Error('not found');
+    return { key, value: raw, shared: !!shared };
+  },
+  async set(key, value, shared){
+    localStorage.setItem('gz_store_'+key, value);
+    return { key, value, shared: !!shared };
+  },
+  async delete(key, shared){
+    localStorage.removeItem('gz_store_'+key);
+    return { key, deleted:true, shared: !!shared };
+  },
+  async list(prefix, shared){
+    const keys = Object.keys(localStorage).filter(k=>k.startsWith('gz_store_'+(prefix||''))).map(k=>k.replace('gz_store_',''));
+    return { keys, prefix, shared: !!shared };
+  }
+};
+</script>
+<style>
+body{ margin:0; background:#f0f4f2; -webkit-tap-highlight-color: transparent; }
+html{ -webkit-text-size-adjust:100%; }
+:root{
+  --bg:       #f0f4f2;
+  --surface:  #ffffff;
+  --surface2: #e8f0ec;
+  --border:   rgba(0,0,0,0.10);
+  --border2:  rgba(0,0,0,0.06);
+  --text:     #1a2a24;
+  --text-mid: #4a6258;
+  --text-dim: #7a9a8e;
+  --gold:     #a06c10;
+  --gold-bg:  #fdf3e0;
+  --gold-txt: #7d5208;
+  --green:    #1e7a45;
+  --green-bg: #e8f5ee;
+  --green-txt:#155c34;
+  --red:      #b5241a;
+  --red-bg:   #fdecea;
+  --red-txt:  #8f1a12;
+  --blue:     #1d5fa8;
+  --blue-bg:  #e8f0fb;
+  --line:     rgba(0,0,0,0.08);
+}
+*{ box-sizing:border-box; }
+#app-root{
+  font-family: 'Segoe UI', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100%;
+}
+
+/* ── HEADER ── */
+.gz-header{
+  background: linear-gradient(135deg,#1d4036 0%,#2d6050 100%);
+  padding: 22px 28px 0;
+  border-bottom: none;
+  position: relative;
+}
+.gz-eyebrow{ font-size:11px; letter-spacing:3px; text-transform:uppercase; color:#e3c372; font-weight:600; margin-bottom:4px; }
+.gz-title{ font-family:Georgia,serif; font-size:22px; font-weight:700; color:#fff; margin:0; display:flex; align-items:baseline; gap:10px; }
+.gz-title span{ font-size:13px; font-weight:400; color:#e3c372; font-family:'Segoe UI',sans-serif;}
+.gz-sub{ font-size:12px; color:rgba(255,255,255,0.6); margin-top:5px; padding-bottom:16px; }
+.gz-header-actions{ position:absolute; top:18px; right:20px; display:flex; gap:8px; }
+.gz-save-btn{
+  background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:#fff;
+  padding:7px 14px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit;
+  display:flex; align-items:center; gap:6px; transition:background .15s;
+}
+.gz-save-btn:hover{ background:rgba(255,255,255,0.25); }
+.gz-save-btn.success{ background:rgba(63,180,100,0.3); border-color:rgba(63,180,100,0.5); }
+
+/* ── TABS ── */
+.gz-tabs{ display:flex; gap:0; padding-top:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+.gz-tabs::-webkit-scrollbar{ display:none; }
+.gz-tab{
+  padding:11px 16px; font-size:13px; font-weight:600; color:rgba(255,255,255,0.55);
+  border-bottom:3px solid transparent; cursor:pointer; user-select:none; white-space:nowrap; flex-shrink:0; transition:color .15s;
+}
+.gz-tab.active{ color:#fff; border-bottom-color:#e3c372; }
+.gz-tab:hover{ color:rgba(255,255,255,0.9); }
+
+/* ── BODY ── */
+.gz-body{ padding:22px 28px 40px; }
+.gz-daterow{ display:flex; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+.gz-daterow label{ font-size:12px; color:var(--text-mid); font-weight:500; }
+.gz-daterow input[type=date]{ background:var(--surface); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:8px; font-size:14px; font-family:inherit; }
+.gz-tare-pills{ display:flex; gap:8px; margin-left:auto; align-items:center; }
+.gz-pill{ font-size:12px; padding:7px 12px; border-radius:20px; background:var(--surface); border:1px solid var(--border); color:var(--text-mid); display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+.gz-pill input{ width:52px; background:transparent; border:none; color:var(--gold); font-weight:700; font-size:12px; text-align:right; }
+.gz-pill input:focus{ outline:none; }
+
+/* ── FORM ── */
+.gz-form{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:22px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+.gz-form-title{ font-size:11.5px; text-transform:uppercase; letter-spacing:1.5px; color:var(--gold); margin-bottom:16px; font-weight:700; }
+.gz-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:14px;}
+.gz-field label{ display:block; font-size:11px; color:var(--text-dim); margin-bottom:5px; font-weight:600; letter-spacing:.3px; text-transform:uppercase;}
+.gz-field select, .gz-field input{
+  width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
+  padding:10px 12px; border-radius:8px; font-size:14px; font-family:inherit;
+}
+.gz-field select:focus, .gz-field input:focus{ outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(160,108,16,0.12); }
+.gz-calc-row{
+  display:flex; align-items:center; gap:10px; background:var(--bg);
+  border:1px dashed var(--border); border-radius:10px; padding:12px 14px; margin-bottom:14px;
+  font-size:13px; color:var(--text-mid); flex-wrap:wrap;
+}
+.gz-calc-row .res{ color:var(--gold); font-weight:700; font-size:14.5px; }
+
+/* ── BUTTONS ── */
+.gz-btn{ background:var(--gold); color:#fff; border:none; padding:11px 22px; border-radius:8px; font-size:13.5px; font-weight:700; cursor:pointer; font-family:inherit; transition:transform .12s,filter .12s; }
+.gz-btn:hover{ filter:brightness(1.1); transform:translateY(-1px); }
+.gz-btn:disabled{ opacity:0.4; cursor:not-allowed; transform:none; }
+.gz-btn.small{ padding:6px 13px; font-size:12px; }
+.gz-btn.secondary{ background:var(--surface2); color:var(--text-mid); border:1px solid var(--border); }
+.gz-btn.secondary:hover{ background:var(--border); }
+.gz-btn.danger{ background:transparent; color:var(--red); border:1px solid rgba(181,36,26,0.25); padding:6px 10px; font-size:12px; }
+.gz-btn.danger:hover{ background:var(--red-bg); }
+
+/* ── CARDS ── */
+.gz-summary{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:22px; }
+.gz-card{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+.gz-card .lbl{ font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:6px; font-weight:600;}
+.gz-card .val{ font-family:Georgia,serif; font-size:21px; font-weight:700; color:var(--text); }
+.gz-card .val.gold{ color:var(--gold); }
+.gz-card .val.ok{ color:var(--green); }
+.gz-card .val.warn{ color:var(--red); }
+.gz-card .note{ font-size:10.5px; color:var(--text-dim); margin-top:4px; }
+
+/* ── TABLE ── */
+.gz-table-wrap{ background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:24px; box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.gz-table-head{ display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--border); background:var(--surface); }
+.gz-table-head h3{ margin:0; font-size:12.5px; font-weight:700; color:var(--gold); text-transform:uppercase; letter-spacing:1px;}
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+thead th{ text-align:left; padding:9px 14px; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-dim); border-bottom:1px solid var(--border); white-space:nowrap; background:var(--bg); font-weight:600;}
+tbody td{ padding:10px 14px; border-bottom:1px solid var(--border2); color:var(--text); white-space:nowrap; }
+tbody tr:last-child td{ border-bottom:none; }
+tbody tr:hover{ background:rgba(0,0,0,0.015); }
+tbody input{ background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:6px; font-size:12.5px; width:90px; font-family:inherit;}
+tbody input:focus{ outline:none; border-color:var(--gold); }
+.tag{ display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+.tag.ok{ background:var(--green-bg); color:var(--green-txt); }
+.tag.warn{ background:var(--red-bg); color:var(--red-txt); }
+.gz-foot{ padding:12px 20px; font-size:11px; color:var(--text-dim); border-top:1px solid var(--border2); background:var(--bg); }
+
+/* ── DASHBOARD ── */
+.dash-kpi{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+.dash-kpi-card{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+.dash-kpi-card .dk-lbl{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:600;}
+.dash-kpi-card .dk-val{ font-family:Georgia,serif; font-size:22px; font-weight:700; }
+.dash-kpi-card .dk-sub{ font-size:10.5px; color:var(--text-dim); }
+.dash-kpi-card.accent-gold .dk-val{ color:var(--gold); }
+.dash-kpi-card.accent-red .dk-val{ color:var(--red); }
+.dash-kpi-card.accent-green .dk-val{ color:var(--green); }
+.dash-kpi-card.accent-blue .dk-val{ color:var(--blue); }
+.dash-charts{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+.dash-chart-box{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+.dash-chart-box.wide{ grid-column:1/-1; }
+.dash-chart-title{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gold); margin-bottom:14px; }
+.dash-chart-wrap{ position:relative; height:220px; }
+.dash-chart-wrap.tall{ height:260px; }
+.dash-range-row{ display:flex; align-items:center; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+.dash-range-row span{ font-size:12px; color:var(--text-mid); }
+.dash-range-btn{ padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--surface); color:var(--text-mid); cursor:pointer; transition:all .15s; font-family:inherit; }
+.dash-range-btn.active{ background:var(--gold); color:#fff; border-color:var(--gold); }
+.dash-empty{ text-align:center; color:var(--text-dim); padding:30px 0; font-size:13px; }
+.dash-loss-table{ width:100%; font-size:12px; border-collapse:collapse; }
+.dash-loss-table th{ text-align:left; padding:8px 12px; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); border-bottom:1px solid var(--border); font-weight:600; background:var(--bg);}
+.dash-loss-table td{ padding:9px 12px; border-bottom:1px solid var(--border2); color:var(--text); }
+.dash-loss-table tr:last-child td{ border-bottom:none; }
+.dash-bar-mini{ display:flex; align-items:center; gap:8px; }
+.dash-bar-mini-track{ flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+.dash-bar-mini-fill{ height:100%; border-radius:3px; transition:width .4s ease; }
+
+/* KPI accent bars */
+.gz-kpi{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+.gz-kpi::before{ content:""; position:absolute; top:0; left:0; right:0; height:3px; }
+.gz-kpi.blue::before{ background:linear-gradient(90deg,#3b82f6,#60a5fa); }
+.gz-kpi.gold::before{ background:linear-gradient(90deg,var(--gold),#d4a020); }
+.gz-kpi.green::before{ background:linear-gradient(90deg,var(--green),#3fc878); }
+.gz-kpi.red::before{ background:linear-gradient(90deg,var(--red),#e05a50); }
+.gz-kpi .lbl{ font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:6px; font-weight:600;}
+.gz-kpi .val{ font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--text); line-height:1.1; }
+.gz-kpi .sub{ font-size:10.5px; color:var(--text-dim); margin-top:4px; }
+.gz-dash-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+.gz-chart-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-bottom:16px; }
+.gz-chart-box{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 18px 14px; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+.gz-chart-box.wide{ grid-column:1/-1; }
+.gz-chart-title{ font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--gold); font-weight:700; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+.gz-chart-title span{ font-size:10.5px; color:var(--text-dim); text-transform:none; letter-spacing:0; font-weight:400; }
+.gz-range-row{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+.gz-range-row label{ font-size:11.5px; color:var(--text-mid); font-weight:500; }
+.gz-range-btn{ padding:6px 13px; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--text-mid); font-size:12px; cursor:pointer; font-family:inherit; transition:all .15s; }
+.gz-range-btn.active{ background:var(--gold); color:#fff; border-color:var(--gold); font-weight:700; }
+.gz-no-data{ text-align:center; padding:32px; color:var(--text-dim); font-size:13px; }
+
+/* ── ENTRY MODAL ── */
+.gz-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:100; display:flex; align-items:flex-end; justify-content:center; animation:fadeIn .15s ease; }
+@keyframes fadeIn{ from{opacity:0} to{opacity:1} }
+.gz-modal{ background:var(--surface); border-radius:20px 20px 0 0; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; animation:slideUp2 .2s ease; box-shadow:0 -4px 30px rgba(0,0,0,0.15); }
+@keyframes slideUp2{ from{transform:translateY(30px);opacity:0} to{transform:translateY(0);opacity:1} }
+.gz-modal-handle{ width:40px; height:4px; background:var(--border); border-radius:2px; margin:12px auto 0; }
+.gz-modal-header{ padding:14px 20px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.gz-modal-header h3{ margin:0; font-size:14px; font-weight:700; color:var(--text); }
+.gz-modal-header .close{ background:var(--surface2); border:none; width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:16px; color:var(--text-mid); display:flex; align-items:center; justify-content:center; }
+.gz-modal-body{ padding:16px 20px 24px; }
+.gz-modal-section{ margin-bottom:18px; }
+.gz-modal-section-title{ font-size:10.5px; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:var(--gold); margin-bottom:10px; }
+.gz-size-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.gz-size-field{ background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+.gz-size-field label{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700; margin-bottom:6px; }
+.gz-size-field input{ width:100%; background:transparent; border:none; font-size:18px; font-weight:700; color:var(--text); font-family:inherit; }
+.gz-size-field input:focus{ outline:none; }
+.gz-size-field .sub{ font-size:10.5px; color:var(--text-dim); margin-top:2px; }
+.gz-modal-result{ background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:18px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+.gz-modal-result .ritem .rlbl{ font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--text-dim); margin-bottom:4px; font-weight:600;}
+.gz-modal-result .ritem .rval{ font-size:18px; font-weight:700; font-family:Georgia,serif; }
+.gz-modal-actions{ display:flex; gap:10px; }
+.gz-modal-actions .gz-btn{ flex:1; padding:14px; font-size:14px; }
+/* Summary row cards */
+.gz-sumrow{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+.gz-sumrow-head{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.gz-sumrow-date{ font-size:11px; color:var(--text-dim); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:3px 8px; }
+.gz-sumrow-prod{ font-size:13px; font-weight:700; color:var(--text); flex:1; }
+.gz-sumrow-code{ font-size:11px; color:var(--text-dim); }
+.gz-sumrow-stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+.gz-stat{ text-align:center; }
+.gz-stat .sl{ font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); font-weight:600; margin-bottom:3px; }
+.gz-stat .sv{ font-size:15px; font-weight:700; color:var(--text); }
+.gz-stat .sv.gold{ color:var(--gold); }
+.gz-sumrow-footer{ display:flex; gap:8px; align-items:center; }
+.gz-sumrow-footer .gz-btn{ flex:none; font-size:12px; padding:8px 14px; }
+/* ── SYNC PANEL ── */
+.gz-sync-panel{ position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; display:flex; align-items:center; justify-content:center; padding:20px; animation:fadeIn .15s ease; }
+.gz-sync-box{ background:var(--surface); border-radius:18px; width:100%; max-width:440px; box-shadow:0 8px 40px rgba(0,0,0,0.18); overflow:hidden; }
+.gz-sync-head{ background:linear-gradient(135deg,#1d4036,#2d6050); padding:20px 22px 16px; color:#fff; display:flex; justify-content:space-between; align-items:flex-start; }
+.gz-sync-head h3{ margin:0 0 4px; font-size:16px; font-weight:700; }
+.gz-sync-head p{ margin:0; font-size:12px; opacity:.7; }
+.gz-sync-body{ padding:20px 22px; }
+.gz-sync-label{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:8px; display:block; }
+.gz-sync-code-row{ display:flex; gap:8px; align-items:center; }
+.gz-sync-code-input{ flex:1; background:var(--bg); border:1.5px solid var(--border); color:var(--text); padding:12px 14px; border-radius:10px; font-size:16px; font-family:'Courier New',monospace; font-weight:700; letter-spacing:2px; }
+.gz-sync-code-input:focus{ outline:none; border-color:var(--gold); }
+.gz-sync-info{ background:var(--blue-bg); border:1px solid rgba(29,95,168,0.2); border-radius:10px; padding:12px 14px; font-size:12.5px; color:var(--blue); line-height:1.7; margin-bottom:16px; }
+.gz-sync-status{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-mid); min-height:24px; margin:8px 0; }
+.gz-sync-spinner{ width:13px; height:13px; border:2px solid var(--border); border-top-color:var(--gold); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+@keyframes spin{ to{transform:rotate(360deg)} }
+.gz-sync-actions{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+.gz-sync-actions .gz-btn{ padding:13px; font-size:13px; }
+.gz-sync-close{ background:rgba(255,255,255,0.15); border:none; color:#fff; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.gz-sync-dot{ width:7px; height:7px; border-radius:50%; background:#6ee7a0; display:inline-block; box-shadow:0 0 0 2px rgba(110,231,160,0.3); margin-right:3px; }
+hr.gz-sync-hr{ border:none; border-top:1px solid var(--border); margin:16px 0; }
+.gz-toast{ position:fixed; bottom:24px; right:24px; background:#1a2a24; color:#fff; padding:12px 18px; border-radius:10px; font-size:13px; font-weight:600; z-index:999; display:flex; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,0.25); animation:slideUp .2s ease; }
+@keyframes slideUp{ from{transform:translateY(10px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+/* mobile */
+@media(max-width:640px){
+  #app-root{ border-radius:0; }
+  .gz-header{ padding:14px 16px 0; position:sticky; top:0; z-index:10; }
+  .gz-header-actions{ top:10px; right:12px; }
+  .gz-save-btn{ padding:6px 10px; font-size:11px; }
+  .gz-body{ padding:14px 14px 40px; }
+  .gz-title{ font-size:18px; flex-wrap:wrap; }
+  .gz-title span{ font-size:11px; }
+  .gz-daterow{ flex-direction:column; align-items:stretch; gap:10px; }
+  .gz-daterow input[type=date]{ width:100%; padding:12px; font-size:16px; }
+  .gz-tare-pills{ margin-left:0; width:100%; justify-content:space-between; }
+  .gz-pill{ flex:1; justify-content:center; padding:9px 8px; }
+  .gz-pill input{ width:46px; }
+  .gz-grid{ grid-template-columns:1fr; gap:12px; }
+  .gz-field select,.gz-field input{ padding:12px; font-size:16px; }
+  .gz-btn{ width:100%; padding:14px; font-size:14px; }
+  .gz-btn.small{ width:auto; padding:9px 12px; }
+  .gz-table-head{ flex-direction:column; align-items:stretch; gap:8px; padding:12px 14px; }
+  .gz-table-head div{ display:flex; gap:6px; flex-wrap:wrap; }
+  .gz-table-head .gz-btn.small{ flex:1; min-width:100px; }
+  .gz-summary{ grid-template-columns:1fr 1fr; }
+  table{ font-size:12px; }
+  thead th,tbody td{ padding:8px 9px; }
+  tbody input{ width:68px; padding:7px; font-size:13px; }
+  .gz-calc-row{ flex-direction:column; align-items:flex-start; gap:6px; }
+  .dash-charts,.gz-chart-grid{ grid-template-columns:1fr; }
+  .gz-kpi .val{ font-size:18px; }
+  .dash-chart-wrap,.dash-chart-wrap.tall{ height:190px; }
+}
+@media (max-width:420px){
+  .gz-summary{ grid-template-columns: 1fr 1fr; }
+  .gz-card .val{ font-size:18px; }
+}
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+const STORE_BATCHES = "gz_batches_v2";
+const STORE_KHO = "gz_kho_v2";
+const STORE_PRODUCTS = "gz_products_v2";
+const STORE_TARE = "gz_tare_v2";
+
+const DEFAULT_TARE = { xe1: 12.91, xe2: 13.39 };
+const DEFAULT_PRODUCTS = [
+  { code: "1024505", name: "BBG RONG BIỂN GIÒN NƯỚC TƯƠNG 50G*20EA", klbb: 0.05 },
+  { code: "1024506", name: "BBG RONG BIỂN GIÒN NƯỚC TƯƠNG 30GX20EA", klbb: 0.03 },
+  { code: "1024508", name: "BBG RONG BIỂN GIÒN CÁ HỒI 45GX20EA", klbb: 0.045 },
+  { code: "1027251", name: "BBG RB GIÒN CHÀ BÔNG GÀ 45G*20EA", klbb: 0.045 },
+  { code: "1027250", name: "BBG RB GIÒN CHÀ BÔNG BÒ 45G*20EA", klbb: 0.045 },
+  { code: "1027245", name: "BBG RB GIÒN CHÀ BÔNG TÔM 45G*20EA", klbb: 0.045 },
+  { code: "1027689", name: "BBG RB GIÒN CHÀ BÔNG BÒ 30G*2*20EA", klbb: 0.03 },
+  { code: "1027691", name: "BBG RB GIÒN CHÀ BÔNG TÔM 30G*2*20EA", klbb: 0.03 },
+  { code: "1027692", name: "BBG RB GIÒN CHÀ BÔNG GÀ 30G*2*20EA", klbb: 0.03 },
+];
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function fmt(n, d=2){ if (n===null||n===undefined||isNaN(n)) return "—"; return Number(n).toLocaleString('vi-VN',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtPct(n){ if (n===null||n===undefined||isNaN(n)) return "—"; return Number(n).toLocaleString('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1})+"%"; }
+
+function csvEscape(v){
+  if (v===null || v===undefined) return "";
+  const s = String(v);
+  if (/[",\n;]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+function downloadCSV(filename, rows){
+  const BOM = "\uFEFF"; // for Excel Vietnamese accents
+  const csv = BOM + rows.map(row => row.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function loadKey(key, fallback){
+  try{
+    const r = await window.storage.get(key, false);
+    if (r && r.value) return JSON.parse(r.value);
+  } catch(e){}
+  return fallback;
+}
+async function saveKey(key, value){
+  try{ await window.storage.set(key, JSON.stringify(value), false); } catch(e){ console.error(e); }
+}
+
+function App(){
+  const [tab, setTab] = useState("batches"); // batches | summary
+  const [date, setDate] = useState(todayStr());
+  const [loading, setLoading] = useState(true);
+
+  const [tare, setTare] = useState(DEFAULT_TARE);
+  const [products, setProducts] = useState(DEFAULT_PRODUCTS);
+  const [batches, setBatches] = useState([]);
+  const [kho, setKho] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const [t, p, b, k] = await Promise.all([
+        loadKey(STORE_TARE, DEFAULT_TARE),
+        loadKey(STORE_PRODUCTS, DEFAULT_PRODUCTS),
+        loadKey(STORE_BATCHES, []),
+        loadKey(STORE_KHO, []),
+      ]);
+      setTare(t); setProducts(p); setBatches(b); setKho(k);
+      setLoading(false);
+    })();
+  }, []);
+
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, ms=2200) => {
+    setToast(msg);
+    setTimeout(()=>setToast(null), ms);
+  };
+
+  // ---------- CLOUD SYNC (jsonblob.com - free, no signup) ----------
+  const BLOB_BASE = "https://jsonblob.com/api/jsonBlob";
+  const SYNC_KEY_STORE = "gz_sync_blob_id";
+  const [showSync, setShowSync] = useState(false);
+  const [syncCode, setSyncCode] = useState(() => localStorage.getItem(SYNC_KEY_STORE) || "");
+  const [syncStatus, setSyncStatus] = useState(""); // message string
+  const [syncing, setSyncing] = useState(false);
+
+  const buildPayload = () => ({ batches, kho, products, tare, syncedAt: new Date().toISOString(), version:2 });
+
+  const syncPush = async () => {
+    setSyncing(true); setSyncStatus("Đang đẩy dữ liệu lên cloud...");
+    try {
+      const payload = buildPayload();
+      if (syncCode) {
+        // Update existing blob
+        const res = await fetch(`${BLOB_BASE}/${syncCode}`, {
+          method:"PUT", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Cập nhật thất bại (mã không đúng hoặc hết hạn)");
+        setSyncStatus(`✅ Đã đẩy lên thành công! Mã: ${syncCode}`);
+        showToast("☁️ Đồng bộ lên cloud thành công!", 2500);
+      } else {
+        // Create new blob
+        const res = await fetch(BLOB_BASE, {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Tạo mới thất bại");
+        const loc = res.headers.get("location") || res.url;
+        const newId = loc.split("/").pop();
+        setSyncCode(newId);
+        localStorage.setItem(SYNC_KEY_STORE, newId);
+        setSyncStatus(`✅ Tạo mã đồng bộ thành công! Mã: ${newId}`);
+        showToast("☁️ Đã tạo mã đồng bộ cloud!", 3000);
+      }
+    } catch(err) {
+      setSyncStatus("❌ Lỗi: " + err.message);
+    } finally { setSyncing(false); }
+  };
+
+  const syncPull = async () => {
+    if (!syncCode.trim()) { setSyncStatus("⚠️ Nhập mã đồng bộ trước."); return; }
+    setSyncing(true); setSyncStatus("Đang kéo dữ liệu từ cloud...");
+    try {
+      const res = await fetch(`${BLOB_BASE}/${syncCode.trim()}`, {
+        headers:{"Accept":"application/json"}
+      });
+      if (!res.ok) throw new Error("Mã không tồn tại hoặc đã hết hạn");
+      const data = await res.json();
+      if (!data.batches || !data.kho) throw new Error("Dữ liệu cloud không hợp lệ");
+      setBatches(data.batches); await saveKey(STORE_BATCHES, data.batches);
+      setKho(data.kho); await saveKey(STORE_KHO, data.kho);
+      if (data.products){ setProducts(data.products); await saveKey(STORE_PRODUCTS, data.products); }
+      if (data.tare){ setTare(data.tare); await saveKey(STORE_TARE, data.tare); }
+      localStorage.setItem(SYNC_KEY_STORE, syncCode.trim());
+      const syncTime = data.syncedAt ? new Date(data.syncedAt).toLocaleString('vi-VN') : "";
+      setSyncStatus(`✅ Đã đồng bộ ${data.batches.length} mẻ, ${data.kho.length} dòng tổng hợp. ${syncTime ? "(lần cuối: "+syncTime+")" : ""}`);
+      showToast(`☁️ Đồng bộ xong! ${data.batches.length} mẻ rang.`, 3000);
+    } catch(err) {
+      setSyncStatus("❌ " + err.message);
+    } finally { setSyncing(false); }
+  };
+
+  const copyCode = () => {
+    navigator.clipboard?.writeText(syncCode).then(()=>showToast("📋 Đã copy mã!")).catch(()=>{});
+  };
+  const [saveStatus, setSaveStatus] = useState('idle'); // idle | saving | saved
+
+  const [lastSaved, setLastSaved] = useState(null);
+
+  const saveAllData = async () => {
+    setSaveStatus('saving');
+    try {
+      await Promise.all([
+        saveKey(STORE_BATCHES, batches),
+        saveKey(STORE_KHO, kho),
+        saveKey(STORE_PRODUCTS, products),
+        saveKey(STORE_TARE, tare),
+      ]);
+      setSaveStatus('saved');
+      const now = new Date();
+      setLastSaved(now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'}));
+      showToast(`✅ Đã lưu thành công! ${batches.length} mẻ rang, ${kho.length} dòng tổng hợp.`);
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } catch(e) {
+      setSaveStatus('idle');
+      showToast('❌ Lưu thất bại, vui lòng thử lại.', 3000);
+    }
+  };
+
+  const exportBackup = () => {
+    const payload = { batches, kho, products, tare, exportedAt: new Date().toISOString(), version: 2 };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const d = new Date().toISOString().slice(0,10);
+    a.href = url; a.download = `gimjaban_backup_${d}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("✅ Đã xuất file backup thành công!");
+  };
+
+  const restoreBackup = () => {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data.batches || !data.kho) throw new Error("Invalid file");
+        setBatches(data.batches); await saveKey(STORE_BATCHES, data.batches);
+        setKho(data.kho); await saveKey(STORE_KHO, data.kho);
+        if (data.products) { setProducts(data.products); await saveKey(STORE_PRODUCTS, data.products); }
+        if (data.tare) { setTare(data.tare); await saveKey(STORE_TARE, data.tare); }
+        showToast(`✅ Đã khôi phục ${data.batches.length} mẻ rang và ${data.kho.length} dòng tổng hợp!`, 3500);
+      } catch(err) {
+        showToast("❌ File không hợp lệ, vui lòng chọn lại.", 3000);
+      }
+    };
+    document.body.appendChild(input); input.click(); document.body.removeChild(input);
+  };
+  const updateTare = (key, val) => {
+    const next = { ...tare, [key]: val };
+    setTare(next);
+    saveKey(STORE_TARE, next);
+  };
+
+  // ---------- PRODUCT CATALOG ----------
+  const [newCode, setNewCode] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newKlbb, setNewKlbb] = useState("");
+
+  const addProduct = () => {
+    if (!newName.trim()) return;
+    const next = [...products, { code: newCode.trim(), name: newName.trim(), klbb: newKlbb ? parseFloat(newKlbb) : 0.03 }];
+    setProducts(next); saveKey(STORE_PRODUCTS, next);
+    setNewCode(""); setNewName(""); setNewKlbb("");
+  };
+  const updateProduct = (idx, field, value) => {
+    const next = products.map((p,i)=> i===idx ? {...p, [field]: field==="klbb" ? parseFloat(value)||0 : value} : p);
+    setProducts(next); saveKey(STORE_PRODUCTS, next);
+  };
+  const deleteProduct = (idx) => {
+    const next = products.filter((_,i)=>i!==idx);
+    setProducts(next); saveKey(STORE_PRODUCTS, next);
+    if (productIdx >= next.length) setProductIdx(0);
+  };
+
+  // ---------- BATCH FORM STATE ----------
+  const [productIdx, setProductIdx] = useState(0);
+  const [xe1Gross, setXe1Gross] = useState("");
+  const [xe2Gross, setXe2Gross] = useState("");
+  const [note, setNote] = useState("");
+
+  const x1 = parseFloat(xe1Gross);
+  const x2 = parseFloat(xe2Gross);
+  const totalGross = (!isNaN(x1) ? x1 : 0) + (!isNaN(x2) ? x2 : 0);
+  const tareSum = (parseFloat(tare.xe1)||0) + (parseFloat(tare.xe2)||0);
+  const netAfterRoast = (!isNaN(x1) || !isNaN(x2)) ? Math.max(totalGross - tareSum, 0) : null;
+  const canAddBatch = (!isNaN(x1) || !isNaN(x2)) && totalGross > tareSum;
+
+  const addBatch = async () => {
+    if (!canAddBatch) return;
+    const prod = products[productIdx] || products[0];
+    const entry = {
+      id: Date.now()+"_"+Math.random().toString(36).slice(2,7),
+      date, code: prod.code, product: prod.name,
+      xe1: isNaN(x1)?0:x1, xe2: isNaN(x2)?0:x2,
+      tare1: parseFloat(tare.xe1)||0, tare2: parseFloat(tare.xe2)||0,
+      totalGross: Number(totalGross.toFixed(2)),
+      netAfterRoast: Number(netAfterRoast.toFixed(2)),
+      note: note.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    const next = [entry, ...batches];
+    setBatches(next);
+    saveKey(STORE_BATCHES, next);
+    setXe1Gross(""); setXe2Gross(""); setNote("");
+  };
+  const deleteBatch = (id) => {
+    const next = batches.filter(b=>b.id!==id);
+    setBatches(next); saveKey(STORE_BATCHES, next);
+  };
+
+  // ---------- EXCEL IMPORT ----------
+  const [importRows, setImportRows] = useState([]);
+  const [importProd, setImportProd] = useState(0);
+  const [importDate2, setImportDate2] = useState(todayStr());
+  const [importError, setImportError] = useState("");
+  const [showImport, setShowImport] = useState(false);
+
+  const handleExcelUpload = (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    setImportError("");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = window.XLSX.read(ev.target.result, { type:"binary" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = window.XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+        // Find header row
+        let hi = 0;
+        for(let i=0;i<Math.min(6,raw.length);i++){
+          const s = raw[i].join("|").toLowerCase();
+          if(s.includes("xe") || s.includes("x1") || s.includes("x2")){ hi=i; break; }
+        }
+        const hdrs = raw[hi].map(h=>String(h).toLowerCase().trim());
+        const fc = (...keys) => { for(const k of keys){ const i=hdrs.findIndex(h=>h.includes(k)); if(i>=0)return i; } return -1; };
+        const c1 = fc("xe 1","xe1","x1","xe_1"); const c2 = fc("xe 2","xe2","x2","xe_2"); const cn = fc("ghi chú","note","ghi chu");
+        const t1=parseFloat(tare.xe1)||12.91, t2=parseFloat(tare.xe2)||13.39;
+        const dataRows = raw.slice(hi+1).filter(r=>r.some(v=>v!==""));
+        if(!dataRows.length){ setImportError("Không tìm thấy dữ liệu."); return; }
+        const parsed = dataRows.map((row,idx)=>{
+          const x1=parseFloat(c1>=0?row[c1]:row[1])||0;
+          const x2=parseFloat(c2>=0?row[c2]:row[2])||0;
+          const note=cn>=0?String(row[cn]):`mẻ ${idx+1}`;
+          const total=x1+x2, net=Math.max(total-t1-t2,0);
+          return {xe1:x1,xe2:x2,note,total,net,valid:total>(t1+t2)};
+        }).filter(r=>r.xe1>0||r.xe2>0);
+        if(!parsed.length){ setImportError("Không đọc được Xe 1/Xe 2. Kiểm tra cột trong file."); return; }
+        setImportRows(parsed); setShowImport(true); e.target.value="";
+      } catch(err){ setImportError("Lỗi đọc file: "+err.message); }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const confirmImport = async () => {
+    const prod = products[importProd]||products[0];
+    const t1=parseFloat(tare.xe1)||12.91, t2=parseFloat(tare.xe2)||13.39;
+    const newB = importRows.filter(r=>r.valid).map((r,i)=>({
+      id: Date.now()+"_i"+i+"_"+Math.random().toString(36).slice(2,5),
+      date:importDate2, code:prod.code, product:prod.name,
+      xe1:r.xe1, xe2:r.xe2, tare1:t1, tare2:t2,
+      totalGross:+r.total.toFixed(2), netAfterRoast:+r.net.toFixed(2),
+      note:r.note, createdAt:new Date().toISOString(),
+    }));
+    const next=[...newB,...batches];
+    setBatches(next); await saveKey(STORE_BATCHES,next);
+    setImportRows([]); setShowImport(false);
+    showToast(`✅ Đã import ${newB.length} mẻ từ Excel!`,3000);
+  };
+
+  const dayBatches = useMemo(() => batches.filter(b=>b.date===date)
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)), [batches, date]);
+
+  const dayTotalsByProduct = useMemo(() => {
+    const map = {};
+    dayBatches.forEach(b => {
+      const k = b.code+"|"+b.product;
+      if (!map[k]) map[k] = { code:b.code, product:b.product, count:0, sumGross:0, sumNet:0 };
+      map[k].count++; map[k].sumGross += b.totalGross; map[k].sumNet += b.netAfterRoast;
+    });
+    return Object.values(map);
+  }, [dayBatches]);
+
+  const dayTotalsAll = useMemo(() => {
+    if (dayBatches.length===0) return null;
+    return {
+      count: dayBatches.length,
+      sumGross: dayBatches.reduce((s,b)=>s+b.totalGross,0),
+      sumNet: dayBatches.reduce((s,b)=>s+b.netAfterRoast,0),
+    };
+  }, [dayBatches]);
+
+  // ---------- KHO (DAILY SUMMARY) ----------
+  const dayKho = useMemo(() => kho.filter(k=>k.date===date), [kho, date]);
+
+  // Products that have batches today (for smart default when adding a row)
+  const productsWithBatchesToday = useMemo(() => {
+    const existingKeys = new Set(dayKho.map(r => r.code+"|"+r.product));
+    // First: products in today's batches not yet added to summary
+    const fromBatches = dayTotalsByProduct.filter(p => !existingKeys.has(p.code+"|"+p.product));
+    return fromBatches;
+  }, [dayTotalsByProduct, dayKho]);
+
+  const addKhoRow = async () => {
+    // Default to first product in today's batches not yet summarised, else first product in catalog
+    let prod;
+    if (productsWithBatchesToday.length > 0) {
+      const bp = productsWithBatchesToday[0];
+      prod = products.find(p => p.code===bp.code && p.name===bp.product) || { code: bp.code, name: bp.product, klbb: 0.03 };
+    } else {
+      prod = products[0] || { code: "", name: "", klbb: 0.03 };
+    }
+    const autoNet = dayTotalsByProduct.find(p=>p.code===prod.code && p.product===prod.name);
+    const entry = {
+      id: Date.now()+"_"+Math.random().toString(36).slice(2,7),
+      date, code: prod.code, product: prod.name, klbb: prod.klbb,
+      tongSauRang: autoNet ? Number(autoNet.sumNet.toFixed(2)) : "",
+      sl30g: "", sl45g: "", sl50g: "", sl100g: "",
+      klNhapKho: "", bb30g: "", bb45g: "", bb50g: "", bb100g: "",
+    };
+    const next = [...kho, entry];
+    setKho(next); saveKey(STORE_KHO, next);
+  };
+
+  const updateKhoRow = (id, field, value) => {
+    const next = kho.map(r => {
+      if (r.id !== id) return r;
+      if (field === "product") {
+        // cascade: update code + klbb + auto-pull tongSauRang when product changes
+        const prod = products.find(p => p.name === value);
+        const autoNet = dayTotalsByProduct.find(p => p.product === value);
+        return {
+          ...r,
+          product: value,
+          code: prod ? prod.code : r.code,
+          klbb: prod ? prod.klbb : r.klbb,
+          tongSauRang: autoNet ? Number(autoNet.sumNet.toFixed(2)) : r.tongSauRang,
+        };
+      }
+      return { ...r, [field]: value };
+    });
+    setKho(next); saveKey(STORE_KHO, next);
+  };
+
+  const deleteKhoRow = (id) => {
+    const next = kho.filter(r=>r.id!==id);
+    setKho(next); saveKey(STORE_KHO, next);
+  };
+  const pullFromBatches = (id) => {
+    const row = kho.find(r=>r.id===id);
+    if (!row) return;
+    const match = dayTotalsByProduct.find(p=>p.code===row.code && p.product===row.product);
+    updateKhoRow(id, "tongSauRang", match ? Number(match.sumNet.toFixed(2)) : 0);
+  };
+
+  const khoComputed = useMemo(() => dayKho.map(r => {
+    const tsr = parseFloat(r.tongSauRang);
+    const kln = parseFloat(r.klNhapKho);
+    const sl30 = parseFloat(r.sl30g)||0;
+    const sl45 = parseFloat(r.sl45g)||0;
+    const sl50 = parseFloat(r.sl50g)||0;
+    const sl100 = parseFloat(r.sl100g)||0;
+    const slTotal = sl30 + sl45 + sl50 + sl100;
+    const bb30 = parseFloat(r.bb30g)||0;
+    const bb45 = parseFloat(r.bb45g)||0;
+    const bb50 = parseFloat(r.bb50g)||0;
+    const bb100 = parseFloat(r.bb100g)||0;
+    const bbTotal = bb30 + bb45 + bb50 + bb100;
+    const hasSl = r.sl30g||r.sl45g||r.sl50g||r.sl100g;
+    const hasBb = r.bb30g||r.bb45g||r.bb50g||r.bb100g;
+    const haoHutKC = (!isNaN(tsr) && !isNaN(kln)) ? Number((tsr-kln).toFixed(3)) : null;
+    const lossPct = (!isNaN(tsr) && tsr>0 && haoHutKC!==null) ? Number((haoHutKC/tsr*100).toFixed(2)) : null;
+    const haoHutBB = (hasSl && hasBb) ? Number((bbTotal - slTotal).toFixed(0)) : null;
+    const lossBBPct = (hasSl && hasBb && bbTotal > 0) ? Number(((bbTotal - slTotal) / bbTotal * 100).toFixed(1)) : null;
+    const hh30 = (r.sl30g!==undefined&&r.sl30g!=="") ? bb30-sl30 : null;
+    const hh45 = (r.sl45g!==undefined&&r.sl45g!=="") ? bb45-sl45 : null;
+    const hh50 = (r.sl50g!==undefined&&r.sl50g!=="") ? bb50-sl50 : null;
+    const hh100 = (r.sl100g!==undefined&&r.sl100g!=="") ? bb100-sl100 : null;
+    const lossBBPct30 = (bb30>0) ? Number(((bb30-sl30)/bb30*100).toFixed(1)) : null;
+    const lossBBPct45 = (bb45>0) ? Number(((bb45-sl45)/bb45*100).toFixed(1)) : null;
+    const lossBBPct50 = (bb50>0) ? Number(((bb50-sl50)/bb50*100).toFixed(1)) : null;
+    const lossBBPct100 = (bb100>0) ? Number(((bb100-sl100)/bb100*100).toFixed(1)) : null;
+    return { ...r, slTotal, bbTotal, haoHutKC, lossPct, haoHutBB, lossBBPct, hh30, hh45, hh50, hh100, lossBBPct30, lossBBPct45, lossBBPct50, lossBBPct100, bb30, bb45, bb50, bb100, sl30, sl45, sl50, sl100 };
+  }), [dayKho]);
+
+  const [expandBB, setExpandBB] = useState(null);
+  const toggleBB = (id) => setExpandBB(prev => prev === id ? null : id);
+
+  // Modal entry state
+  const [editModal, setEditModal] = useState(null); // null | { id, fields }
+  const openEdit = (r) => setEditModal({ id: r.id, fields: {
+    tongSauRang: r.tongSauRang||"", klNhapKho: r.klNhapKho||"",
+    bb30g: r.bb30g||"", bb45g: r.bb45g||"", bb50g: r.bb50g||"", bb100g: r.bb100g||"",
+    sl30g: r.sl30g||"", sl45g: r.sl45g||"", sl50g: r.sl50g||"", sl100g: r.sl100g||"",
+  }});
+  const setEditField = (f, v) => setEditModal(m => ({...m, fields:{...m.fields,[f]:v}}));
+  const saveEdit = () => {
+    if (!editModal) return;
+    const next = kho.map(r => r.id===editModal.id ? {...r, ...editModal.fields} : r);
+    setKho(next); saveKey(STORE_KHO, next);
+    setEditModal(null);
+    showToast("✅ Đã cập nhật dữ liệu!");
+  };
+  const modalComputed = useMemo(() => {
+    if (!editModal) return null;
+    const f = editModal.fields;
+    const tsr=parseFloat(f.tongSauRang)||0, kln=parseFloat(f.klNhapKho)||0;
+    const bb30=parseFloat(f.bb30g)||0, bb45=parseFloat(f.bb45g)||0, bb50=parseFloat(f.bb50g)||0, bb100=parseFloat(f.bb100g)||0;
+    const sl30=parseFloat(f.sl30g)||0, sl45=parseFloat(f.sl45g)||0, sl50=parseFloat(f.sl50g)||0, sl100=parseFloat(f.sl100g)||0;
+    const bbTotal=bb30+bb45+bb50+bb100, slTotal=sl30+sl45+sl50+sl100;
+    const lossCan = (tsr>0&&kln>0) ? ((tsr-kln)/tsr*100) : null;
+    const lossBB = (bbTotal>0) ? ((bbTotal-slTotal)/bbTotal*100) : null;
+    return { tsr, kln, bbTotal, slTotal, lossCan, lossBB };
+  }, [editModal]);
+
+  const dayLossAvg = useMemo(() => {
+    const valid = khoComputed.filter(r=>r.lossPct!==null);
+    if (valid.length===0) return null;
+    const totalNet = valid.reduce((s,r)=>s+parseFloat(r.tongSauRang||0),0);
+    const totalLoss = valid.reduce((s,r)=>s+(r.haoHutKC||0),0);
+    return totalNet>0 ? (totalLoss/totalNet*100) : null;
+  }, [khoComputed]);
+
+  // ---------- EXPORT CSV ----------
+  const exportBatchesCSV = (scope) => {
+    const data = scope==="day" ? dayBatches : batches;
+    const header = ["Ngày","Giờ","Code","Sản phẩm","Xe 1 (kg)","Xe 2 (kg)","Bì Xe 1","Bì Xe 2","Tổng cân (kg)","KL sau rang (kg)","Ghi chú"];
+    const rows = [header, ...data.slice().sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).map(b => [
+      b.date, new Date(b.createdAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}),
+      b.code, b.product, fmt(b.xe1), fmt(b.xe2), fmt(b.tare1), fmt(b.tare2), fmt(b.totalGross), fmt(b.netAfterRoast), b.note
+    ])];
+    downloadCSV(`me_rang_${scope==="day"?date:"all"}.csv`, rows);
+  };
+
+  const exportKhoCSV = (scope) => {
+    const data = scope==="day" ? dayKho : kho;
+
+    const header = [
+      "Ngày","Code","Sản phẩm","KLBB (kg)",
+      // KL
+      "KL sau rang (kg)","KL nhập kho (kg)","Loss cân (kg)","Loss cân (%)",
+      // Bao bì nhận
+      "BB nhận 30g (túi)","BB nhận 45g (túi)","BB nhận 50g (túi)","BB nhận 100g (túi)","Tổng BB nhận (túi)",
+      // Bao bì nhập kho
+      "BB nhập kho 30g (túi)","BB nhập kho 45g (túi)","BB nhập kho 50g (túi)","BB nhập kho 100g (túi)","Tổng BB nhập kho (túi)",
+      // Loss từng size — số túi
+      "Loss 30g (túi)","Loss 45g (túi)","Loss 50g (túi)","Loss 100g (túi)","Tổng loss BB (túi)",
+      // Loss từng size — %
+      "Loss 30g (%)","Loss 45g (%)","Loss 50g (%)","Loss 100g (%)","Tổng loss BB (%)",
+    ];
+
+    const fmtN = (v, d=2) => (v===null||v===undefined||isNaN(v)) ? "" : Number(v).toFixed(d);
+    const fmtI = (v) => (v===null||v===undefined||isNaN(v)) ? "" : String(Math.round(v));
+    const lossPct = (nhan, nhap) => (nhan>0) ? ((nhan-nhap)/nhan*100) : null;
+
+    const rows = [header, ...data.map(r => {
+      const tsr = parseFloat(r.tongSauRang)||0;
+      const kln = parseFloat(r.klNhapKho)||0;
+      const bb30=parseFloat(r.bb30g)||0, bb45=parseFloat(r.bb45g)||0, bb50=parseFloat(r.bb50g)||0, bb100=parseFloat(r.bb100g)||0;
+      const sl30=parseFloat(r.sl30g)||0, sl45=parseFloat(r.sl45g)||0, sl50=parseFloat(r.sl50g)||0, sl100=parseFloat(r.sl100g)||0;
+      const bbTotal=bb30+bb45+bb50+bb100;
+      const slTotal=sl30+sl45+sl50+sl100;
+      const lossCan = kln>0 ? tsr-kln : null;
+      const lossCanPct = (tsr>0&&lossCan!==null) ? (lossCan/tsr*100) : null;
+      const l30=bb30-sl30, l45=bb45-sl45, l50=bb50-sl50, l100=bb100-sl100;
+      const lTotal=bbTotal-slTotal;
+      return [
+        r.date, r.code||"", r.product||"", r.klbb||"",
+        fmtN(tsr), fmtN(kln), fmtN(lossCan,3), fmtN(lossCanPct),
+        fmtI(bb30), fmtI(bb45), fmtI(bb50), fmtI(bb100), fmtI(bbTotal),
+        fmtI(sl30), fmtI(sl45), fmtI(sl50), fmtI(sl100), fmtI(slTotal),
+        fmtI(l30), fmtI(l45), fmtI(l50), fmtI(l100), fmtI(lTotal),
+        fmtN(lossPct(bb30,sl30),1), fmtN(lossPct(bb45,sl45),1), fmtN(lossPct(bb50,sl50),1), fmtN(lossPct(bb100,sl100),1), fmtN(lossPct(bbTotal,slTotal),1),
+      ];
+    })];
+    downloadCSV(`hao_hut_${scope==="day"?date:"all"}.csv`, rows);
+  };
+
+  const exportProductsCSV = () => {
+    const header = ["Code","Tên sản phẩm","KLBB (kg/gói)"];
+    const rows = [header, ...products.map(p => [p.code, p.name, p.klbb])];
+    downloadCSV("danh_muc_san_pham.csv", rows);
+  };
+
+  // ---------- DASHBOARD ----------
+  const [dashRange, setDashRange] = useState(14);
+  const chartRefs = { loss: useRef(), kl: useRef(), bb: useRef(), prod: useRef() };
+  const chartInst = useRef({});
+  const destroyChart = (key) => { try{ if(chartInst.current[key]){chartInst.current[key].destroy();chartInst.current[key]=null;} }catch(e){} };
+
+  const allKhoComputed = useMemo(() => kho.map(r => {
+    const tsr=parseFloat(r.tongSauRang)||0, kln=parseFloat(r.klNhapKho)||0;
+    const sl30=parseFloat(r.sl30g)||0,sl45=parseFloat(r.sl45g)||0,sl50=parseFloat(r.sl50g)||0,sl100=parseFloat(r.sl100g)||0;
+    const bb30=parseFloat(r.bb30g)||0,bb45=parseFloat(r.bb45g)||0,bb50=parseFloat(r.bb50g)||0,bb100=parseFloat(r.bb100g)||0;
+    const slTotal=sl30+sl45+sl50+sl100, bbTotal=bb30+bb45+bb50+bb100;
+    const haoHutKC=kln>0?tsr-kln:null;
+    const lossPct=(tsr>0&&haoHutKC!==null)?haoHutKC/tsr*100:null;
+    const lossBB=(bbTotal>0||slTotal>0)?bbTotal-slTotal:null;
+    return {...r,tsr,kln,slTotal,bbTotal,haoHutKC,lossPct,lossBB,sl30,sl45,sl50,sl100,bb30,bb45,bb50,bb100};
+  }), [kho]);
+
+  const allBatchByDate = useMemo(() => {
+    const map={};
+    batches.forEach(b=>{ if(!map[b.date])map[b.date]={date:b.date,count:0,sumNet:0}; map[b.date].count++;map[b.date].sumNet+=b.netAfterRoast; });
+    return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
+  },[batches]);
+
+  const rangeStart = useMemo(()=>{ if(dashRange===0)return null; const d=new Date();d.setDate(d.getDate()-dashRange+1);return d.toISOString().slice(0,10); },[dashRange]);
+  const filteredKho = useMemo(()=>rangeStart?allKhoComputed.filter(r=>r.date>=rangeStart):allKhoComputed,[allKhoComputed,rangeStart]);
+  const filteredBatch = useMemo(()=>rangeStart?allBatchByDate.filter(r=>r.date>=rangeStart):allBatchByDate,[allBatchByDate,rangeStart]);
+
+  const dashKPIs = useMemo(()=>{
+    const totalMes=filteredBatch.reduce((s,r)=>s+r.count,0);
+    const totalKL=filteredBatch.reduce((s,r)=>s+r.sumNet,0);
+    const lossRows=filteredKho.filter(r=>r.lossPct!==null);
+    const avgLoss=lossRows.length?lossRows.reduce((s,r)=>s+r.lossPct,0)/lossRows.length:null;
+    const totalLossBB=filteredKho.reduce((s,r)=>s+(r.lossBB||0),0);
+    const totalNhapKho=filteredKho.reduce((s,r)=>s+r.kln,0);
+    return {totalMes,totalKL,avgLoss,totalLossBB,totalNhapKho};
+  },[filteredBatch,filteredKho]);
+
+  const lossByDate = useMemo(()=>{
+    const map={};
+    filteredKho.forEach(r=>{ if(r.lossPct===null)return; if(!map[r.date])map[r.date]={sum:0,cnt:0}; map[r.date].sum+=r.lossPct;map[r.date].cnt++; });
+    return Object.entries(map).sort(([a],[b])=>a.localeCompare(b)).map(([date,v])=>({date,pct:v.sum/v.cnt}));
+  },[filteredKho]);
+
+  const klByDate = useMemo(()=>{
+    const map={};
+    filteredKho.forEach(r=>{ if(!map[r.date])map[r.date]={rang:0,nhap:0}; map[r.date].rang+=r.tsr;map[r.date].nhap+=r.kln; });
+    return Object.entries(map).sort(([a],[b])=>a.localeCompare(b)).map(([date,v])=>({date,...v}));
+  },[filteredKho]);
+
+  const bbBySize = useMemo(()=>{
+    return ['30','45','50','100'].map(s=>({
+      size:s+'g',
+      nhan:filteredKho.reduce((sum,r)=>sum+(parseFloat(r['bb'+s+'g'])||0),0),
+      nhap:filteredKho.reduce((sum,r)=>sum+(parseFloat(r['sl'+s+'g'])||0),0),
+    }));
+  },[filteredKho]);
+
+  const topProducts = useMemo(()=>{
+    const map={};
+    filteredKho.forEach(r=>{ const k=r.product||"?"; if(!map[k])map[k]={product:k,tsr:0,kln:0}; map[k].tsr+=r.tsr;map[k].kln+=r.kln; });
+    return Object.values(map).sort((a,b)=>b.tsr-a.tsr).slice(0,6);
+  },[filteredKho]);
+
+  const fmtDateShort = (d)=>{ const p=d.split('-');return p[2]+'/'+p[1]; };
+
+  const COLORS={gold:'rgba(201,162,75,0.9)',goldFill:'rgba(201,162,75,0.15)',green:'rgba(63,180,100,0.85)',greenFill:'rgba(63,180,100,0.15)',red:'rgba(210,70,60,0.85)',blue:'rgba(96,165,250,0.85)'};
+  const TICK={color:'#7a9a8e',font:{size:10.5,family:'Segoe UI,sans-serif'}};
+  const GRID={color:'rgba(0,0,0,0.07)'};
+  const TOOLTIP={backgroundColor:'#ffffff',titleColor:'#1a2a24',bodyColor:'#4a6258',borderColor:'rgba(0,0,0,0.12)',borderWidth:1,padding:10,boxPadding:4};
+  const baseOpts=(yLabel='',horizontal=false)=>({
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#4a6258',font:{size:11,family:'Segoe UI,sans-serif'},boxWidth:12,padding:14}},tooltip:TOOLTIP},
+    scales: horizontal
+      ? {x:{ticks:TICK,grid:GRID,title:{display:!!yLabel,text:yLabel,color:'#7a9a8e',font:{size:10}}},y:{ticks:{...TICK,font:{size:10.5}},grid:GRID}}
+      : {x:{ticks:TICK,grid:GRID},y:{ticks:TICK,grid:GRID,title:{display:!!yLabel,text:yLabel,color:'#7a9a8e',font:{size:10}}}}
+  });
+
+  useEffect(()=>{
+    if(tab!=='dashboard')return;
+    setTimeout(()=>{
+      destroyChart('loss');
+      if(chartRefs.loss.current&&lossByDate.length){
+        chartInst.current.loss=new Chart(chartRefs.loss.current,{
+          type:'line',
+          data:{labels:lossByDate.map(r=>fmtDateShort(r.date)),datasets:[
+            {label:'Loss cân (%)',data:lossByDate.map(r=>+r.pct.toFixed(2)),borderColor:COLORS.gold,backgroundColor:COLORS.goldFill,pointBackgroundColor:COLORS.gold,tension:0.35,fill:true,pointRadius:4,pointHoverRadius:6},
+            {label:'Ngưỡng 5%',data:lossByDate.map(()=>5),borderColor:'rgba(210,70,60,0.5)',borderDash:[6,4],pointRadius:0,fill:false,borderWidth:1.5},
+          ]},
+          options:{...baseOpts('%'),plugins:{...baseOpts('%').plugins}}
+        });
+      }
+      destroyChart('kl');
+      if(chartRefs.kl.current&&klByDate.length){
+        chartInst.current.kl=new Chart(chartRefs.kl.current,{
+          type:'bar',
+          data:{labels:klByDate.map(r=>fmtDateShort(r.date)),datasets:[
+            {label:'KL sau rang (kg)',data:klByDate.map(r=>+r.rang.toFixed(2)),backgroundColor:COLORS.gold,borderRadius:5,barPercentage:0.6},
+            {label:'KL nhập kho (kg)',data:klByDate.map(r=>+r.nhap.toFixed(2)),backgroundColor:COLORS.green,borderRadius:5,barPercentage:0.6},
+          ]},
+          options:baseOpts('kg')
+        });
+      }
+      destroyChart('bb');
+      if(chartRefs.bb.current&&bbBySize.some(r=>r.nhan||r.nhap)){
+        chartInst.current.bb=new Chart(chartRefs.bb.current,{
+          type:'bar',
+          data:{labels:bbBySize.map(r=>r.size),datasets:[
+            {label:'BB nhận (túi)',data:bbBySize.map(r=>r.nhan),backgroundColor:COLORS.green,borderRadius:5,barPercentage:0.6},
+            {label:'BB nhập kho (túi)',data:bbBySize.map(r=>r.nhap),backgroundColor:COLORS.gold,borderRadius:5,barPercentage:0.6},
+            {label:'Loss BB (túi)',data:bbBySize.map(r=>r.nhan-r.nhap),backgroundColor:COLORS.red,borderRadius:5,barPercentage:0.6},
+          ]},
+          options:baseOpts('túi')
+        });
+      }
+      destroyChart('prod');
+      if(chartRefs.prod.current&&topProducts.length){
+        chartInst.current.prod=new Chart(chartRefs.prod.current,{
+          type:'bar',
+          data:{labels:topProducts.map(r=>r.product.replace(/^BBG (RONG BIỂN |RB )/,'')),datasets:[
+            {label:'KL sau rang (kg)',data:topProducts.map(r=>+r.tsr.toFixed(2)),backgroundColor:COLORS.gold,borderRadius:5,barPercentage:0.55},
+            {label:'KL nhập kho (kg)',data:topProducts.map(r=>+r.kln.toFixed(2)),backgroundColor:COLORS.blue,borderRadius:5,barPercentage:0.55},
+          ]},
+          options:{...baseOpts('kg',true),indexAxis:'y'}
+        });
+      }
+    },50);
+    return()=>['loss','kl','bb','prod'].forEach(destroyChart);
+  },[tab,dashRange,lossByDate.length,klByDate.length,bbBySize,topProducts.length]);
+
+  return (
+    <div>
+      <div className="gz-header">
+        <div className="gz-header-actions">
+          <button className="gz-save-btn" onClick={()=>setShowSync(true)} title="Đồng bộ dữ liệu giữa các thiết bị">
+            {syncCode ? <span><span className="gz-sync-dot"/></span> : null}
+            ☁️ Đồng bộ
+          </button>
+          <button className="gz-save-btn" onClick={restoreBackup} title="Khôi phục từ file backup">↑ Khôi phục</button>
+          <button className="gz-save-btn" onClick={exportBackup} title="Xuất file JSON để sao lưu">⤓ Xuất file</button>
+          <button
+            className={"gz-save-btn"+(saveStatus==='saved'?' success':'')}
+            onClick={saveAllData}
+            disabled={saveStatus==='saving'}
+          >
+            {saveStatus==='saving' ? '⏳...' : saveStatus==='saved' ? '✅ Đã lưu' : '💾 Lưu'}
+          </button>
+        </div>
+        <div className="gz-eyebrow">Gimjaban · Kiểm soát hao hụt</div>
+        <h1 className="gz-title">Sổ rang &amp; theo dõi hao hụt <span>Yield &amp; Loss Log</span></h1>
+        <div className="gz-sub">Cân mẻ rang theo xe 1 / xe 2, trừ bì, tổng hợp theo sản phẩm và đối chiếu hao hụt khi nhập kho.</div>
+        <div className="gz-tabs">
+          <div className={"gz-tab "+(tab==="batches"?"active":"")} onClick={()=>setTab("batches")}>Cân mẻ rang</div>
+          <div className={"gz-tab "+(tab==="summary"?"active":"")} onClick={()=>setTab("summary")}>Tổng hợp hao hụt</div>
+          <div className={"gz-tab "+(tab==="dashboard"?"active":"")} onClick={()=>setTab("dashboard")}>📊 Dashboard</div>
+          <div className={"gz-tab "+(tab==="products"?"active":"")} onClick={()=>setTab("products")}>Danh mục sản phẩm</div>
+        </div>
+      </div>
+      {lastSaved && (
+        <div style={{background:'rgba(30,122,69,0.08)',borderBottom:'1px solid rgba(30,122,69,0.15)',padding:'5px 28px',fontSize:11.5,color:'var(--green)',display:'flex',alignItems:'center',gap:6}}>
+          <span>✓</span><span>Đã lưu lúc {lastSaved} · Dữ liệu an toàn trong bộ nhớ trình duyệt</span>
+          <span style={{marginLeft:'auto',opacity:.6}}>Nhớ bấm "Xuất file" định kỳ để sao lưu ngoài</span>
+        </div>
+      )}
+
+      <div className="gz-body">
+        <div className="gz-daterow">
+          <label>Ngày</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} />
+          <div className="gz-tare-pills">
+            <span className="gz-pill">Xe 1 = <input type="number" step="0.01" value={tare.xe1} onChange={e=>updateTare("xe1", e.target.value)} /> kg</span>
+            <span className="gz-pill">Xe 2 = <input type="number" step="0.01" value={tare.xe2} onChange={e=>updateTare("xe2", e.target.value)} /> kg</span>
+          </div>
+        </div>
+
+        {tab === "batches" && (
+          <React.Fragment>
+            <div className="gz-form">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <div className="gz-form-title" style={{margin:0}}>Nhập mẻ mới (xe 1 &amp; xe 2)</div>
+                <label style={{cursor:"pointer"}}>
+                  <span className="gz-btn small secondary" style={{display:"inline-flex",alignItems:"center",gap:5}}>
+                    📊 Import Excel
+                  </span>
+                  <input type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={handleExcelUpload}/>
+                </label>
+              </div>
+              {importError && <div style={{background:"var(--red-bg)",color:"var(--red)",padding:"8px 12px",borderRadius:8,fontSize:12.5,marginBottom:12}}>{importError}</div>}
+              <div className="gz-grid">
+                <div className="gz-field">
+                  <label>Sản phẩm</label>
+                  <select value={productIdx} onChange={e=>setProductIdx(Number(e.target.value))}>
+                    {products.map((p,i)=>(<option key={i} value={i}>{(p.code?p.code+" — ":"")+p.name}</option>))}
+                  </select>
+                </div>
+                <div className="gz-field">
+                  <label>Xe 1 - KL cân (kg)</label>
+                  <input type="number" inputMode="decimal" step="0.01" placeholder="VD: 32.72" value={xe1Gross} onChange={e=>setXe1Gross(e.target.value)} />
+                </div>
+                <div className="gz-field">
+                  <label>Xe 2 - KL cân (kg)</label>
+                  <input type="number" inputMode="decimal" step="0.01" placeholder="VD: 32.12" value={xe2Gross} onChange={e=>setXe2Gross(e.target.value)} />
+                </div>
+                <div className="gz-field">
+                  <label>Ghi chú (tuỳ chọn)</label>
+                  <input type="text" placeholder="VD: mẻ 1" value={note} onChange={e=>setNote(e.target.value)} />
+                </div>
+              </div>
+              <div className="gz-calc-row">
+                <span>Tổng KL cân (xe1+xe2) = <span className="res">{fmt(totalGross)} kg</span></span>
+                <span style={{opacity:0.3}}>|</span>
+                <span>Trừ bì (xe1+xe2 = {fmt(tareSum)} kg) → KL sau rang = <span className="res">{netAfterRoast!==null ? fmt(netAfterRoast)+" kg" : "—"}</span></span>
+                {totalGross>0 && totalGross<=tareSum && (
+                  <span style={{color:"var(--red)"}}>⚠ Tổng KL cân phải lớn hơn tổng bì 2 xe</span>
+                )}
+              </div>
+              <button className="gz-btn" disabled={!canAddBatch} onClick={addBatch}>+ Thêm mẻ vào sổ</button>
+            </div>
+
+            {dayTotalsAll && (
+              <div className="gz-summary">
+                <div className="gz-card"><div className="lbl">Số mẻ trong ngày</div><div className="val">{dayTotalsAll.count}</div></div>
+                <div className="gz-card"><div className="lbl">Tổng KL cân</div><div className="val gold">{fmt(dayTotalsAll.sumGross)} kg</div></div>
+                <div className="gz-card"><div className="lbl">Tổng KL sau rang</div><div className="val gold">{fmt(dayTotalsAll.sumNet)} kg</div></div>
+              </div>
+            )}
+
+            {dayTotalsByProduct.length > 0 && (
+              <div className="gz-table-wrap">
+                <div className="gz-table-head"><h3>Tổng theo sản phẩm trong ngày</h3></div>
+                <table>
+                  <thead><tr><th>Code</th><th>Sản phẩm</th><th>Số mẻ</th><th>Tổng KL cân</th><th>Tổng KL sau rang</th></tr></thead>
+                  <tbody>
+                    {dayTotalsByProduct.map((p,i)=>(
+                      <tr key={i}><td>{p.code||"—"}</td><td>{p.product}</td><td>{p.count}</td><td>{fmt(p.sumGross)} kg</td><td>{fmt(p.sumNet)} kg</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="gz-table-wrap">
+              <div className="gz-table-head">
+                <h3>Chi tiết từng mẻ — {date}</h3>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="gz-btn small" onClick={()=>exportBatchesCSV("day")}>⤓ Xuất CSV (ngày)</button>
+                  <button className="gz-btn small" onClick={()=>exportBatchesCSV("all")}>⤓ Xuất CSV (toàn bộ)</button>
+                </div>
+              </div>
+              {loading ? (
+                <div className="empty-state">Đang tải dữ liệu...</div>
+              ) : dayBatches.length===0 ? (
+                <div className="empty-state">Chưa có mẻ nào trong ngày này.</div>
+              ) : (
+                <div style={{overflowX:"auto"}}>
+                  <table>
+                    <thead><tr><th>Giờ</th><th>Sản phẩm</th><th>Xe 1</th><th>Xe 2</th><th>Tổng cân</th><th>Sau rang</th><th>Ghi chú</th><th></th></tr></thead>
+                    <tbody>
+                      {dayBatches.map(b=>(
+                        <tr key={b.id}>
+                          <td>{new Date(b.createdAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})}</td>
+                          <td>{b.product}</td>
+                          <td>{fmt(b.xe1)}</td>
+                          <td>{fmt(b.xe2)}</td>
+                          <td>{fmt(b.totalGross)}</td>
+                          <td>{fmt(b.netAfterRoast)}</td>
+                          <td>{b.note||"—"}</td>
+                          <td><button className="gz-btn danger" onClick={()=>deleteBatch(b.id)}>Xoá</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Excel Import Preview Modal */}
+            {showImport && (
+              <div className="gz-overlay" onClick={e=>{if(e.target===e.currentTarget){setShowImport(false);setImportRows([]);}}}>
+                <div className="gz-modal">
+                  <div className="gz-modal-handle"/>
+                  <div className="gz-modal-header">
+                    <h3>📊 Xem trước import — {importRows.length} mẻ</h3>
+                    <button className="close" onClick={()=>{setShowImport(false);setImportRows([]);}}>✕</button>
+                  </div>
+                  <div className="gz-modal-body">
+                    <div className="gz-modal-section">
+                      <div className="gz-modal-section-title">Cấu hình</div>
+                      <div className="gz-size-grid">
+                        <div className="gz-size-field">
+                          <label>Ngày sản xuất</label>
+                          <input type="date" value={importDate2} onChange={e=>setImportDate2(e.target.value)}
+                            style={{fontSize:14,fontWeight:600,width:"100%",background:"transparent",border:"none",fontFamily:"inherit",color:"var(--text)"}}/>
+                        </div>
+                        <div className="gz-size-field">
+                          <label>Sản phẩm</label>
+                          <select value={importProd} onChange={e=>setImportProd(Number(e.target.value))}
+                            style={{width:"100%",background:"transparent",border:"none",color:"var(--text)",fontSize:13,fontFamily:"inherit"}}>
+                            {products.map((p,i)=><option key={i} value={i}>{(p.code?p.code+" ":"")+p.name.replace(/^BBG (RONG BIỂN |RB )/,"")}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="gz-modal-section">
+                      <div className="gz-modal-section-title">Chi tiết từng mẻ</div>
+                      <div style={{maxHeight:260,overflowY:"auto",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+                          <thead>
+                            <tr style={{background:"var(--bg)"}}>
+                              {["Mẻ","Xe 1","Xe 2","Tổng cân","Sau rang","Ghi chú"].map((h,i)=>(
+                                <th key={i} style={{padding:"8px 10px",textAlign:i>0&&i<5?"right":"left",fontWeight:600,color:i===4?"var(--gold)":"var(--text-dim)",fontSize:10.5,textTransform:"uppercase",borderBottom:"1px solid var(--border)"}}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importRows.map((r,i)=>(
+                              <tr key={i} style={{background:r.valid?"":"var(--red-bg)",borderBottom:"1px solid var(--border2)"}}>
+                                <td style={{padding:"8px 10px",color:"var(--text-dim)"}}>{i+1}</td>
+                                <td style={{padding:"8px 10px",textAlign:"right"}}>{r.xe1||"—"}</td>
+                                <td style={{padding:"8px 10px",textAlign:"right"}}>{r.xe2||"—"}</td>
+                                <td style={{padding:"8px 10px",textAlign:"right"}}>{fmt(r.total)}</td>
+                                <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:r.valid?"var(--gold)":"var(--red)"}}>
+                                  {r.valid ? fmt(r.net)+" kg" : <span style={{fontSize:11}}>KL &lt; bì xe</span>}
+                                </td>
+                                <td style={{padding:"8px 10px",color:"var(--text-dim)",fontSize:11}}>{r.note}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{marginTop:8,fontSize:12,color:"var(--text-dim)"}}>
+                        ✅ {importRows.filter(r=>r.valid).length}/{importRows.length} mẻ hợp lệ &nbsp;·&nbsp; Bì: Xe1={tare.xe1}kg, Xe2={tare.xe2}kg
+                        {importRows.some(r=>!r.valid) && <span style={{color:"var(--red)",marginLeft:8}}>⚠ {importRows.filter(r=>!r.valid).length} mẻ bị bỏ qua</span>}
+                      </div>
+                    </div>
+                    <div className="gz-modal-actions">
+                      <button className="gz-btn secondary" onClick={()=>{setShowImport(false);setImportRows([]);}}>Huỷ</button>
+                      <button className="gz-btn" disabled={!importRows.some(r=>r.valid)} onClick={confirmImport}>
+                        ✓ Import {importRows.filter(r=>r.valid).length} mẻ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </React.Fragment>
+        )}
+
+                {tab === "summary" && (
+          <React.Fragment>
+            {dayLossAvg !== null && (
+              <div className="gz-summary">
+                <div className="gz-card">
+                  <div className="lbl">Loss cân TB ngày</div>
+                  <div className={"val "+(dayLossAvg>5?"warn":"ok")}>{fmtPct(dayLossAvg)}</div>
+                  <div className="note">Tổng hao hụt / KL sau rang</div>
+                </div>
+              </div>
+            )}
+            {productsWithBatchesToday.length > 0 && (
+              <div style={{background:"rgba(201,162,75,0.10)",border:"1px solid rgba(201,162,75,0.3)",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:12.5,color:"var(--gold)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span>⚡</span>
+                <span>Có mẻ rang của <b>{productsWithBatchesToday.map(p=>p.product.replace(/^BBG (RONG BIỂN |RB )/,'')).join(", ")}</b> chưa có trong bảng tổng hợp.</span>
+                <button className="gz-btn small" onClick={addKhoRow} style={{marginLeft:"auto"}}>+ Thêm ngay</button>
+              </div>
+            )}
+
+            {/* Card list */}
+            <div style={{marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:12,fontWeight:600,color:"var(--text-dim)",textTransform:"uppercase",letterSpacing:1}}>
+                {dayKho.length} dòng — {date}
+              </span>
+              <div style={{display:"flex",gap:8}}>
+                <button className="gz-btn small secondary" onClick={addKhoRow}>+ Thêm dòng</button>
+                <button className="gz-btn small secondary" onClick={()=>exportKhoCSV("day")}>⤓ CSV ngày</button>
+                <button className="gz-btn small secondary" onClick={()=>exportKhoCSV("all")}>⤓ CSV tất cả</button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="gz-sumrow" style={{textAlign:"center",color:"var(--text-dim)",padding:30}}>Đang tải...</div>
+            ) : khoComputed.length === 0 ? (
+              <div className="gz-sumrow" style={{textAlign:"center",color:"var(--text-dim)",padding:30}}>
+                Chưa có dòng nào cho ngày này. Bấm "+ Thêm dòng" để bắt đầu.
+              </div>
+            ) : khoComputed.map(r => (
+              <div key={r.id} className="gz-sumrow">
+                <div className="gz-sumrow-head">
+                  <span className="gz-sumrow-date">{r.date}</span>
+                  <span className="gz-sumrow-prod">{r.product.replace(/^BBG (RONG BIỂN |RB )/,'')}</span>
+                  <span className="gz-sumrow-code">{r.code}</span>
+                </div>
+                <div className="gz-sumrow-stats">
+                  <div className="gz-stat">
+                    <div className="sl">KL sau rang</div>
+                    <div className="sv gold">{r.tongSauRang ? fmt(r.tongSauRang)+" kg" : "—"}</div>
+                  </div>
+                  <div className="gz-stat">
+                    <div className="sl">KL nhập kho</div>
+                    <div className="sv">{r.klNhapKho ? fmt(r.klNhapKho)+" kg" : "—"}</div>
+                  </div>
+                  <div className="gz-stat">
+                    <div className="sl">Loss cân</div>
+                    <div className={"sv "+(r.lossPct!==null?(r.lossPct>5?"warn":"ok"):"")}>
+                      {r.lossPct!==null ? fmtPct(r.lossPct) : "—"}
+                    </div>
+                  </div>
+                  <div className="gz-stat">
+                    <div className="sl">BB nhận (tổng)</div>
+                    <div className="sv">{r.bbTotal > 0 ? r.bbTotal+" túi" : "—"}</div>
+                  </div>
+                  <div className="gz-stat">
+                    <div className="sl">BB nhập kho (tổng)</div>
+                    <div className="sv">{r.slTotal > 0 ? r.slTotal+" túi" : "—"}</div>
+                  </div>
+                  <div className="gz-stat">
+                    <div className="sl">Loss BB</div>
+                    <div className={"sv "+(r.lossBBPct!==null?(r.lossBBPct>3?"warn":"ok"):"")}>
+                      {r.lossBBPct!==null ? fmtPct(r.lossBBPct) : "—"}
+                    </div>
+                  </div>
+                </div>
+                <div className="gz-sumrow-footer">
+                  <button className="gz-btn small" onClick={()=>openEdit(r)}>✏️ Nhập liệu</button>
+                  <button className="gz-btn small secondary" onClick={()=>pullFromBatches(r.id)}>↺ Đồng bộ KL</button>
+                  <button className="gz-btn danger" style={{marginLeft:"auto"}} onClick={()=>deleteKhoRow(r.id)}>Xoá</button>
+                </div>
+              </div>
+            ))}
+
+            {/* Entry Modal */}
+            {editModal && (() => {
+              const row = kho.find(r=>r.id===editModal.id);
+              const mc = modalComputed;
+              return (
+                <div className="gz-overlay" onClick={e=>{if(e.target===e.currentTarget)setEditModal(null);}}>
+                  <div className="gz-modal">
+                    <div className="gz-modal-handle"/>
+                    <div className="gz-modal-header">
+                      <h3>{row ? row.product.replace(/^BBG (RONG BIỂN |RB )/,'') : ""}</h3>
+                      <button className="close" onClick={()=>setEditModal(null)}>✕</button>
+                    </div>
+                    <div className="gz-modal-body">
+                      {/* KL sau rang */}
+                      <div className="gz-modal-section">
+                        <div className="gz-modal-section-title">Khối lượng sau rang (kg)</div>
+                        <div className="gz-size-grid" style={{gridTemplateColumns:"1fr"}}>
+                          <div className="gz-size-field">
+                            <label>KL sau rang</label>
+                            <input type="number" inputMode="decimal" step="0.1" placeholder="0.0"
+                              value={editModal.fields.tongSauRang}
+                              onChange={e=>setEditField("tongSauRang",e.target.value)} />
+                            <div className="sub">Hoặc bấm ↺ Đồng bộ để lấy từ sổ mẻ rang</div>
+                          </div>
+                          <div className="gz-size-field">
+                            <label>KL nhập kho (kg)</label>
+                            <input type="number" inputMode="decimal" step="0.1" placeholder="0.0"
+                              value={editModal.fields.klNhapKho}
+                              onChange={e=>setEditField("klNhapKho",e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bao bì nhận */}
+                      <div className="gz-modal-section">
+                        <div className="gz-modal-section-title">🟢 Bao bì nhận (túi)</div>
+                        <div className="gz-size-grid">
+                          {[["bb30g","30g"],["bb45g","45g"],["bb50g","50g"],["bb100g","100g"]].map(([f,lbl])=>(
+                            <div key={f} className="gz-size-field">
+                              <label>{lbl}</label>
+                              <input type="number" inputMode="numeric" step="1" placeholder="0"
+                                value={editModal.fields[f]}
+                                onChange={e=>setEditField(f,e.target.value)} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Bao bì nhập kho */}
+                      <div className="gz-modal-section">
+                        <div className="gz-modal-section-title">🟡 Bao bì nhập kho (túi)</div>
+                        <div className="gz-size-grid">
+                          {[["sl30g","30g"],["sl45g","45g"],["sl50g","50g"],["sl100g","100g"]].map(([f,lbl])=>(
+                            <div key={f} className="gz-size-field">
+                              <label>{lbl}</label>
+                              <input type="number" inputMode="numeric" step="1" placeholder="0"
+                                value={editModal.fields[f]}
+                                onChange={e=>setEditField(f,e.target.value)} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Live result */}
+                      {mc && (mc.lossCan!==null||mc.lossBB!==null) && (
+                        <div className="gz-modal-result">
+                          <div className="ritem">
+                            <div className="rlbl">Loss cân</div>
+                            <div className={"rval "+(mc.lossCan>5?"warn":"ok")}>{mc.lossCan!==null?fmtPct(mc.lossCan):"—"}</div>
+                          </div>
+                          <div className="ritem">
+                            <div className="rlbl">Loss BB</div>
+                            <div className={"rval "+(mc.lossBB>3?"warn":"ok")}>{mc.lossBB!==null?fmtPct(mc.lossBB):"—"}</div>
+                          </div>
+                          <div className="ritem">
+                            <div className="rlbl">BB chênh lệch</div>
+                            <div className={"rval "+(mc.bbTotal-mc.slTotal>0?"warn":"ok")}>{mc.bbTotal>0?((mc.bbTotal-mc.slTotal)>0?"+":"")+(mc.bbTotal-mc.slTotal)+" túi":"—"}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="gz-modal-actions">
+                        <button className="gz-btn secondary" onClick={()=>setEditModal(null)}>Huỷ</button>
+                        <button className="gz-btn" onClick={saveEdit}>✓ Lưu</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </React.Fragment>
+        )}
+
+{tab === "dashboard" && (
+          <React.Fragment>
+            {/* Range selector */}
+            <div className="dash-range-row">
+              <span>Khoảng thời gian:</span>
+              {[{l:"7 ngày",v:7},{l:"14 ngày",v:14},{l:"30 ngày",v:30},{l:"Tất cả",v:0}].map(opt=>(
+                <button key={opt.v} className={"dash-range-btn "+(dashRange===opt.v?"active":"")} onClick={()=>setDashRange(opt.v)}>{opt.l}</button>
+              ))}
+            </div>
+
+            {/* KPI Cards */}
+            <div className="dash-kpi">
+              <div className="dash-kpi-card accent-gold">
+                <div className="dk-lbl">Tổng số mẻ rang</div>
+                <div className="dk-val">{dashKPIs.totalMes}</div>
+                <div className="dk-sub">mẻ đã rang</div>
+              </div>
+              <div className="dash-kpi-card accent-gold">
+                <div className="dk-lbl">Tổng KL sau rang</div>
+                <div className="dk-val">{fmt(dashKPIs.totalKL,1)}</div>
+                <div className="dk-sub">kg</div>
+              </div>
+              <div className="dash-kpi-card accent-blue">
+                <div className="dk-lbl">Tổng KL nhập kho</div>
+                <div className="dk-val">{fmt(dashKPIs.totalNhapKho,1)}</div>
+                <div className="dk-sub">kg</div>
+              </div>
+              <div className={"dash-kpi-card "+(dashKPIs.avgLoss!==null&&dashKPIs.avgLoss>5?"accent-red":"accent-green")}>
+                <div className="dk-lbl">Loss cân TB</div>
+                <div className="dk-val">{dashKPIs.avgLoss!==null?fmtPct(dashKPIs.avgLoss):"—"}</div>
+                <div className="dk-sub">{dashKPIs.avgLoss!==null&&dashKPIs.avgLoss>5?"⚠ vượt ngưỡng 5%":"✓ trong ngưỡng"}</div>
+              </div>
+              <div className={"dash-kpi-card "+(dashKPIs.totalLossBB>0?"accent-red":"accent-green")}>
+                <div className="dk-lbl">Loss bao bì tổng</div>
+                <div className="dk-val">{dashKPIs.totalLossBB}</div>
+                <div className="dk-sub">túi chênh lệch</div>
+              </div>
+            </div>
+
+            {/* Charts row 1 */}
+            <div className="dash-charts">
+              <div className="dash-chart-box wide">
+                <div className="dash-chart-title">📈 Loss cân (%) theo ngày</div>
+                {lossByDate.length===0
+                  ? <div className="dash-empty">Chưa có dữ liệu loss cân trong khoảng này</div>
+                  : <div className="dash-chart-wrap"><canvas ref={chartRefs.loss} /></div>
+                }
+              </div>
+              <div className="dash-chart-box">
+                <div className="dash-chart-title">📦 KL sau rang vs Nhập kho (kg)</div>
+                {klByDate.length===0
+                  ? <div className="dash-empty">Chưa có dữ liệu</div>
+                  : <div className="dash-chart-wrap"><canvas ref={chartRefs.kl} /></div>
+                }
+              </div>
+              <div className="dash-chart-box">
+                <div className="dash-chart-title">🏷 Bao bì nhận vs Nhập kho theo size</div>
+                {bbBySize.every(r=>!r.nhan&&!r.nhap)
+                  ? <div className="dash-empty">Chưa có dữ liệu bao bì</div>
+                  : <div className="dash-chart-wrap"><canvas ref={chartRefs.bb} /></div>
+                }
+              </div>
+            </div>
+
+            {/* Charts row 2 */}
+            <div className="dash-charts">
+              <div className="dash-chart-box wide">
+                <div className="dash-chart-title">🏭 KL theo sản phẩm</div>
+                {topProducts.length===0
+                  ? <div className="dash-empty">Chưa có dữ liệu</div>
+                  : <div className="dash-chart-wrap tall"><canvas ref={chartRefs.prod} /></div>
+                }
+              </div>
+            </div>
+
+            {/* Loss by day detail table */}
+            <div className="gz-table-wrap">
+              <div className="gz-table-head"><h3>Chi tiết Loss cân theo ngày</h3></div>
+              {lossByDate.length===0
+                ? <div className="empty-state">Chưa có dữ liệu trong khoảng thời gian này.</div>
+                : <div style={{overflowX:"auto"}}>
+                    <table className="dash-loss-table">
+                      <thead><tr><th>Ngày</th><th>Loss cân (%)</th><th>Biểu đồ</th><th>Trạng thái</th></tr></thead>
+                      <tbody>
+                        {[...lossByDate].reverse().map(r=>(
+                          <tr key={r.date}>
+                            <td>{r.date}</td>
+                            <td style={{fontWeight:600,color:r.pct>5?"#e08a7e":"#7ec99a"}}>{fmtPct(r.pct)}</td>
+                            <td style={{minWidth:120}}>
+                              <div className="dash-bar-mini">
+                                <div className="dash-bar-mini-track">
+                                  <div className="dash-bar-mini-fill" style={{width:Math.min(r.pct/10*100,100)+'%',background:r.pct>5?"#e08a7e":"#7ec99a"}} />
+                                </div>
+                              </div>
+                            </td>
+                            <td>{r.pct>5?<span className="tag warn">⚠ Cao</span>:<span className="tag ok">✓ Tốt</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+              }
+              <div className="gz-foot">Ngưỡng cảnh báo loss cân: 5%. Loss tính từ dữ liệu tab Tổng hợp hao hụt.</div>
+            </div>
+          </React.Fragment>
+        )}
+
+        {tab === "products" && (
+          <div className="gz-table-wrap">
+            <div className="gz-table-head">
+              <h3>Danh mục sản phẩm</h3>
+              <button className="gz-btn small" onClick={exportProductsCSV}>⤓ Xuất CSV</button>
+            </div>
+            <div style={{padding:"16px 20px", borderBottom:"1px solid var(--line)"}}>
+              <div className="gz-grid" style={{marginBottom:10}}>
+                <div className="gz-field"><label>Code</label><input type="text" placeholder="VD: 1024505" value={newCode} onChange={e=>setNewCode(e.target.value)} /></div>
+                <div className="gz-field" style={{gridColumn:"span 2"}}><label>Tên sản phẩm</label><input type="text" placeholder="VD: BBG RONG BIỂN GIÒN NƯỚC TƯƠNG 50G*20EA" value={newName} onChange={e=>setNewName(e.target.value)} /></div>
+                <div className="gz-field"><label>KLBB (kg/gói)</label><input type="number" step="0.001" placeholder="0.05" value={newKlbb} onChange={e=>setNewKlbb(e.target.value)} /></div>
+              </div>
+              <button className="gz-btn small" onClick={addProduct}>+ Thêm sản phẩm</button>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table>
+                <thead><tr><th>Code</th><th>Tên sản phẩm</th><th>KLBB (kg/gói)</th><th></th></tr></thead>
+                <tbody>
+                  {products.map((p,i)=>(
+                    <tr key={i}>
+                      <td><input type="text" value={p.code} onChange={e=>updateProduct(i,"code",e.target.value)} /></td>
+                      <td style={{minWidth:280}}><input type="text" style={{width:"100%"}} value={p.name} onChange={e=>updateProduct(i,"name",e.target.value)} /></td>
+                      <td><input type="number" step="0.001" value={p.klbb} onChange={e=>updateProduct(i,"klbb",e.target.value)} /></td>
+                      <td><button className="gz-btn danger" onClick={()=>deleteProduct(i)}>Xoá</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="gz-foot">Danh mục này dùng chung cho cả 2 tab "Cân mẻ rang" và "Tổng hợp hao hụt theo ngày". Sửa hoặc xoá tại đây sẽ áp dụng cho lựa chọn sản phẩm ở các tab khác.</div>
+          </div>
+        )}
+      </div>
+      {toast && <div className="gz-toast">{toast}</div>}
+
+      {/* Cloud Sync Panel */}
+      {showSync && (
+        <div className="gz-sync-panel" onClick={e=>{if(e.target===e.currentTarget)setShowSync(false);}}>
+          <div className="gz-sync-box">
+            <div className="gz-sync-head">
+              <div>
+                <h3>☁️ Đồng bộ Cloud</h3>
+                <p>Chia sẻ dữ liệu giữa điện thoại, máy tính, nhiều người dùng</p>
+              </div>
+              <button className="gz-sync-close" onClick={()=>setShowSync(false)}>✕</button>
+            </div>
+            <div className="gz-sync-body">
+              <div className="gz-sync-info">
+                <b>Cách dùng:</b><br/>
+                1. Thiết bị đầu tiên: bấm <b>"Đẩy lên Cloud"</b> → nhận mã đồng bộ<br/>
+                2. Thiết bị khác: nhập mã → bấm <b>"Kéo về máy"</b><br/>
+                3. Sau đó có thể đẩy/kéo bất cứ lúc nào để cập nhật
+              </div>
+
+              <span className="gz-sync-label">Mã đồng bộ</span>
+              <div className="gz-sync-code-row">
+                <input
+                  className="gz-sync-code-input"
+                  placeholder="Dán mã vào đây..."
+                  value={syncCode}
+                  onChange={e=>{setSyncCode(e.target.value);setSyncStatus("");}}
+                />
+                {syncCode && (
+                  <button className="gz-btn small secondary" onClick={copyCode} title="Copy mã">📋</button>
+                )}
+              </div>
+
+              {syncStatus && (
+                <div className="gz-sync-status">
+                  {syncing && <div className="gz-sync-spinner"/>}
+                  <span style={{color: syncStatus.startsWith("✅")?"var(--green)":syncStatus.startsWith("❌")?"var(--red)":"var(--text-mid)"}}>{syncStatus}</span>
+                </div>
+              )}
+
+              <div className="gz-sync-actions">
+                <button className="gz-btn secondary" disabled={syncing} onClick={syncPull}>
+                  {syncing ? "⏳ Đang xử lý..." : "⬇ Kéo về máy"}
+                </button>
+                <button className="gz-btn" disabled={syncing} onClick={syncPush}>
+                  {syncing ? "⏳ Đang xử lý..." : syncCode ? "⬆ Đẩy lên Cloud" : "⬆ Tạo & Đẩy lên"}
+                </button>
+              </div>
+
+              <hr className="gz-sync-hr"/>
+              <div style={{fontSize:11.5,color:"var(--text-dim)",lineHeight:1.7}}>
+                🔒 Dữ liệu được lưu ẩn danh trên <b>jsonblob.com</b> (miễn phí, không cần tài khoản). Mã đồng bộ là ID duy nhất — ai có mã là xem được dữ liệu. Hạn sử dụng ~30 ngày không hoạt động.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app-root')).render(<App />);
+</script>
+</body>
+</html>
